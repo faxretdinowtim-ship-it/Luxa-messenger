@@ -3,126 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>LUXA — премиум мессенджер</title>
+    <title>LUXA — мессенджер</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: #050508;
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            position: relative;
-            overflow: hidden;
         }
-
-        body::before {
-            content: '';
-            position: fixed;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(ellipse at 20% 25%, rgba(139, 92, 246, 0.12), transparent 70%),
-                        radial-gradient(ellipse at 85% 70%, rgba(99, 102, 241, 0.1), transparent 60%);
-            z-index: -2;
-        }
-
         .app {
             width: 100%;
             max-width: 480px;
-            height: 94vh;
-            max-height: 800px;
-            background: rgba(12, 12, 20, 0.75);
+            height: 95vh;
+            background: rgba(12, 12, 20, 0.9);
             backdrop-filter: blur(32px);
-            border-radius: 52px;
+            border-radius: 48px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 35px 65px -25px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
-            animation: fadeScale 0.4s ease;
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
         }
-
-        @keyframes fadeScale {
-            from { opacity: 0; transform: scale(0.96) translateY(20px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-
         .screen {
             flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 26px 20px;
+            padding: 24px 20px;
             overflow-y: auto;
         }
         .hidden { display: none !important; }
-
-        /* логотип */
-        .logo-block {
-            text-align: center;
-            margin-bottom: 32px;
-        }
+        .logo-block { text-align: center; margin-bottom: 32px; }
         .logo-icon {
-            width: 70px;
-            height: 70px;
-            background: linear-gradient(145deg, #FFFFFF, #E2E2FF);
-            border-radius: 30px;
+            width: 64px; height: 64px;
+            background: linear-gradient(145deg, #fff, #ddd);
+            border-radius: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin: 0 auto 12px;
-            font-size: 36px;
+            font-size: 32px;
         }
-        .logo-text {
-            font-size: 30px;
-            font-weight: 700;
-            letter-spacing: -1px;
-            background: linear-gradient(135deg, #FFF 20%, #C4B5FD 70%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-        .logo-sub {
-            font-size: 11px;
-            letter-spacing: 1.5px;
-            color: rgba(255,255,255,0.45);
-        }
-
-        /* поля */
-        .input-group { margin-bottom: 20px; }
-        .input-label {
-            font-size: 12px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: rgba(255,255,255,0.65);
-            padding-left: 12px;
-        }
+        .logo-text { font-size: 28px; font-weight: 700; color: white; }
+        .logo-sub { font-size: 11px; color: rgba(255,255,255,0.45); }
+        .input-group { margin-bottom: 16px; }
+        .input-label { font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 6px; padding-left: 12px; }
         input {
             width: 100%;
-            padding: 16px 20px;
+            padding: 14px 18px;
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 44px;
+            border-radius: 40px;
             color: white;
             font-size: 15px;
             outline: none;
         }
-        input:focus {
-            border-color: #8B5CF6;
-            background: rgba(255,255,255,0.08);
-        }
         button {
-            background: linear-gradient(105deg, #7C3AED, #6366F1);
+            background: #7C3AED;
             border: none;
-            border-radius: 48px;
-            padding: 16px;
+            border-radius: 44px;
+            padding: 14px;
             color: white;
             font-weight: 600;
             font-size: 16px;
@@ -133,63 +74,53 @@
         .btn-outline {
             background: transparent;
             border: 1px solid rgba(255,255,255,0.2);
-            margin-top: 8px;
         }
-        .success { background: #10b981; margin-top: 16px; text-align: center; padding: 12px; border-radius: 40px; display: none; }
-        .error { background: #ef4444; margin-top: 16px; text-align: center; padding: 12px; border-radius: 40px; display: none; }
-
-        /* карточки контактов/чатов */
-        .friend-card {
+        .success, .error {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 30px;
+            text-align: center;
+            font-size: 13px;
+            display: none;
+        }
+        .success { background: #10b981; }
+        .error { background: #ef4444; }
+        .friend-card, .chat-card {
             background: rgba(255,255,255,0.04);
-            border-radius: 32px;
+            border-radius: 28px;
             padding: 12px 16px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
             gap: 14px;
             cursor: pointer;
             border: 0.5px solid rgba(255,255,255,0.05);
-            transition: 0.2s;
         }
-        .friend-card:active { background: rgba(255,255,255,0.08); transform: scale(0.98); }
         .avatar {
-            width: 52px;
-            height: 52px;
+            width: 48px; height: 48px;
             background: linear-gradient(145deg, #4F46E5, #6D28D9);
-            border-radius: 28px;
+            border-radius: 26px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 26px;
+            font-size: 24px;
         }
         .info { flex: 1; }
-        .name { font-weight: 700; font-size: 16px; }
-        .status {
-            font-size: 12px;
-            opacity: 0.6;
-            margin-top: 4px;
-        }
+        .name { font-weight: 600; font-size: 15px; color: white; }
+        .status { font-size: 11px; opacity: 0.6; margin-top: 3px; }
         .online-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             background: #4ade80;
             border-radius: 8px;
-            margin-right: 6px;
-            box-shadow: 0 0 4px #4ade80;
+            display: inline-block;
+            margin-right: 5px;
         }
-
-        /* сообщения */
         .message {
             max-width: 80%;
-            padding: 10px 16px;
-            border-radius: 26px;
+            padding: 10px 14px;
+            border-radius: 24px;
             font-size: 14px;
-            animation: msgPop 0.25s ease;
-        }
-        @keyframes msgPop {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            margin-bottom: 6px;
         }
         .my-message {
             background: #7C3AED;
@@ -202,43 +133,66 @@
             border-bottom-left-radius: 6px;
         }
         .msg-time { font-size: 9px; opacity: 0.5; margin-top: 4px; text-align: right; }
-
-        .search-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
+        .search-row { display: flex; gap: 8px; margin-bottom: 16px; }
         .search-row input { flex: 1; margin: 0; }
-        .search-row button { width: auto; padding: 0 20px; margin: 0; }
+        .search-row button { width: auto; padding: 0 16px; margin: 0; }
         .small-btn {
             background: rgba(255,255,255,0.08);
             padding: 8px 16px;
-            border-radius: 40px;
+            border-radius: 30px;
             font-size: 13px;
             cursor: pointer;
             display: inline-block;
-            margin-right: 12px;
         }
         .back-btn {
-            width: 42px;
-            height: 42px;
+            width: 40px; height: 40px;
             background: rgba(255,255,255,0.06);
             border-radius: 30px;
-            font-size: 24px;
+            font-size: 22px;
             cursor: pointer;
         }
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px 4px;
+        }
+        .input-line {
+            display: flex;
+            gap: 8px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 50px;
+            padding: 6px 6px 6px 18px;
+            margin-top: 12px;
+        }
+        .input-line input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 10px 0;
+            margin: 0;
+        }
+        .input-line button {
+            width: 44px;
+            height: 44px;
+            margin: 0;
+            padding: 0;
+            font-size: 20px;
+        }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     </style>
 </head>
 <body>
 <div class="app" id="app">
-    <!-- ЭКРАН ВХОДА -->
+    <!-- Экран входа -->
     <div id="loginScreen" class="screen">
         <div class="logo-block">
             <div class="logo-icon">💎</div>
             <div class="logo-text">LUXA</div>
             <div class="logo-sub">PREMIUM MESSENGER</div>
         </div>
-
         <div class="input-group">
             <div class="input-label">📱 ТЕЛЕФОН</div>
             <input type="tel" id="loginPhone" placeholder="+7 999 888 77 66">
@@ -248,28 +202,26 @@
             <input type="text" id="loginName" placeholder="Ваше имя">
         </div>
         <button id="doLoginBtn">ВОЙТИ</button>
-
-        <div class="input-group" style="margin-top: 20px;">
-            <div class="input-label">🔍 ИЗМЕНИТЬ НИК / ID</div>
-            <input type="text" id="newNick" placeholder="Новый ник (будет отображаться у друзей)">
+        <div class="input-group" style="margin-top: 16px;">
+            <div class="input-label">✏️ ИЗМЕНИТЬ НИК</div>
+            <input type="text" id="newNick" placeholder="Новый ник">
         </div>
         <button id="updateProfileBtn" class="btn-outline">ОБНОВИТЬ ПРОФИЛЬ</button>
-
         <div id="successMsg" class="success"></div>
         <div id="errorMsg" class="error"></div>
     </div>
 
-    <!-- ОСНОВНОЙ ЭКРАН -->
+    <!-- Основной экран -->
     <div id="mainScreen" class="screen hidden">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-            <div class="logo-text" style="font-size: 24px;">💬 ЧАТЫ</div>
-            <div><span id="myStatusDot" class="online-dot"></span> <span id="myName"></span></div>
+        <div class="flex-between">
+            <div class="logo-text" style="font-size: 22px;">💬 ЧАТЫ</div>
+            <div><span id="myName" style="font-weight:600;"></span></div>
         </div>
         <div class="search-row">
             <input type="text" id="globalSearch" placeholder="🔍 Поиск по ID или имени">
             <button id="searchUserBtn">НАЙТИ</button>
         </div>
-        <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
             <div class="small-btn" id="tabFriendsBtn">👥 ДРУЗЬЯ</div>
             <div class="small-btn" id="tabGlobalBtn">🌍 ОБЩИЙ ЧАТ</div>
         </div>
@@ -277,27 +229,28 @@
         <div id="globalChatPanel" class="hidden"></div>
     </div>
 
-    <!-- ЭКРАН ЧАТА -->
+    <!-- Экран чата -->
     <div id="chatDialog" class="screen hidden">
-        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
             <button class="back-btn" id="closeChatBtn">←</button>
-            <div style="flex:1"><strong id="dialogName"></strong><div id="dialogStatus" class="status"></div></div>
+            <div style="flex:1"><strong id="dialogName" style="color:white;"></strong><div id="dialogStatus" class="status"></div></div>
         </div>
-        <div id="chatMessages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:8px 4px 20px;"></div>
-        <div style="display:flex; gap:8px; background:rgba(255,255,255,0.04); border-radius:50px; padding:6px 6px 6px 20px; margin-top:12px;">
-            <input type="text" id="msgInput" placeholder="Сообщение..." style="flex:1; background:transparent; border:none; padding:12px 0; color:white;">
-            <button id="sendMsgBtn" style="width:48px; height:48px; margin:0; padding:0; font-size:22px;">➤</button>
+        <div id="chatMessages" class="messages-area"></div>
+        <div class="input-line">
+            <input type="text" id="msgInput" placeholder="Сообщение...">
+            <button id="sendMsgBtn">➤</button>
         </div>
     </div>
 </div>
 
 <script>
-    // ========== ПРАВИЛЬНЫЙ API URL ==========
+    // ========== ПРАВИЛЬНЫЙ URL БЭКЕНДА ==========
     const API = "https://social-v2-z9qu.onrender.com";
+    
     let currentUser = null;
     let activeChat = null;
     let currentFriends = [];
-    let pollingChat = null;
+    let pollingInterval = null;
     let currentTab = 'friends';
 
     // DOM элементы
@@ -310,97 +263,75 @@
     const dialogNameSpan = document.getElementById('dialogName');
     const dialogStatusSpan = document.getElementById('dialogStatus');
 
-    // ========== ФУНКЦИИ АВТОРИЗАЦИИ ==========
-    async function registerOrUpdate(phone, username) {
-        const response = await fetch(`${API}/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, username })
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        if (data.status === 'ok') return data.username;
-        throw new Error(data.message || 'Ошибка регистрации');
-    }
-
     function showSuccess(msg) {
         const el = document.getElementById('successMsg');
         el.textContent = msg;
         el.style.display = 'block';
-        setTimeout(() => { el.style.display = 'none'; }, 3000);
+        setTimeout(() => el.style.display = 'none', 3000);
     }
-
     function showError(msg) {
         const el = document.getElementById('errorMsg');
         el.textContent = msg;
         el.style.display = 'block';
-        setTimeout(() => { el.style.display = 'none'; }, 3000);
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    // Регистрация / обновление
+    async function registerOrUpdate(phone, username) {
+        const res = await fetch(`${API}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, username })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.status === 'ok') return data.username;
+        throw new Error(data.message || 'Ошибка');
     }
 
     // Вход
     document.getElementById('doLoginBtn').onclick = async () => {
         const phone = document.getElementById('loginPhone').value.trim();
         const username = document.getElementById('loginName').value.trim();
-
-        if (!phone || !username) {
-            showError('Заполните все поля');
-            return;
-        }
-
+        if (!phone || !username) { showError('Заполните поля'); return; }
         try {
             const finalName = await registerOrUpdate(phone, username);
             currentUser = { phone, username: finalName };
             localStorage.setItem('luxa_user', JSON.stringify(currentUser));
-            showSuccess(`✅ Добро пожаловать, ${finalName}!`);
-            setTimeout(async () => { await startApp(); }, 1000);
-        } catch (err) {
-            showError('Ошибка: ' + err.message);
-        }
+            showSuccess(`Добро пожаловать, ${finalName}!`);
+            setTimeout(() => startApp(), 500);
+        } catch(e) { showError('Ошибка: ' + e.message); }
     };
 
-    // Обновление профиля
+    // Обновление ника
     document.getElementById('updateProfileBtn').onclick = async () => {
         const newNick = document.getElementById('newNick').value.trim();
         if (!newNick) { showError('Введите новый ник'); return; }
-
-        let phone = currentUser?.phone;
-        if (!phone) phone = document.getElementById('loginPhone').value.trim();
-        if (!phone) { showError('Сначала войдите в аккаунт'); return; }
-
+        let phone = currentUser?.phone || document.getElementById('loginPhone').value.trim();
+        if (!phone) { showError('Сначала войдите'); return; }
         try {
             const newName = await registerOrUpdate(phone, newNick);
-            if (currentUser) {
-                currentUser.username = newName;
-                localStorage.setItem('luxa_user', JSON.stringify(currentUser));
-            }
-            showSuccess(`✅ Ник изменён на "${newName}"`);
+            if (currentUser) currentUser.username = newName;
+            localStorage.setItem('luxa_user', JSON.stringify(currentUser));
+            showSuccess(`Ник изменён на "${newName}"`);
             document.getElementById('loginName').value = newName;
             document.getElementById('newNick').value = '';
-        } catch (err) {
-            showError('Ошибка: ' + err.message);
-        }
+            if (document.getElementById('myName')) document.getElementById('myName').innerText = newName;
+        } catch(e) { showError('Ошибка: ' + e.message); }
     };
 
-    // ========== ОСНОВНОЙ ИНТЕРФЕЙС ==========
-    async function startApp() {
-        document.getElementById('myName').innerText = currentUser.username;
-        loginDiv.classList.add('hidden');
-        mainDiv.classList.remove('hidden');
-        await updateOnline();
-        await renderFriendsList();
-        switchTab('friends');
-        if (Notification.permission === 'default') Notification.requestPermission();
-    }
-
+    // Статус онлайн
     async function updateOnline() {
         if (!currentUser) return;
-        await fetch(`${API}/update_status`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: currentUser.phone })
-        });
+        try {
+            await fetch(`${API}/update_status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: currentUser.phone })
+            });
+        } catch(e) {}
     }
-    setInterval(updateOnline, 25000);
+    setInterval(updateOnline, 20000);
 
     async function getUserStatus(phone, isFriend) {
         try {
@@ -413,7 +344,8 @@
         } catch { return { text: '…', online: false }; }
     }
 
-    async function loadFriendsList() {
+    // Друзья
+    async function loadFriends() {
         const res = await fetch(`${API}/friends/${currentUser.phone}`);
         const data = await res.json();
         currentFriends = data;
@@ -421,36 +353,51 @@
     }
 
     async function renderFriendsList() {
-        const friends = await loadFriendsList();
+        const friends = await loadFriends();
+        const usersRes = await fetch(`${API}/users`);
+        const allUsers = await usersRes.json();
         let html = '';
         for (let f of friends) {
-            const userRes = await fetch(`${API}/users`);
-            const allUsers = await userRes.json();
             const user = allUsers.find(u => u.phone === f.friend_phone);
             const name = user ? user.username : f.friend_phone;
             const status = await getUserStatus(f.friend_phone, true);
-            html += `<div class="friend-card" data-phone="${f.friend_phone}"><div class="avatar">👤</div><div class="info"><div class="name">${escapeHtml(name)}</div><div class="status">${status.online ? '🟢 ' + status.text : '⚫ ' + status.text}</div></div><div>💬</div></div>`;
+            html += `<div class="friend-card" data-phone="${f.friend_phone}">
+                        <div class="avatar">👤</div>
+                        <div class="info">
+                            <div class="name">${escapeHtml(name)}</div>
+                            <div class="status">${status.online ? '🟢 ' + status.text : '⚫ ' + status.text}</div>
+                        </div>
+                        <div>💬</div>
+                    </div>`;
         }
-        friendsPanel.innerHTML = html || '<div style="text-align:center; opacity:0.6;">➕ Добавьте друзей через поиск</div>';
-        document.querySelectorAll('.friend-card').forEach(card => { card.onclick = () => openChatWith(card.dataset.phone); });
+        friendsPanel.innerHTML = html || '<div style="text-align:center; padding:40px;">➕ Добавьте друзей через поиск</div>';
+        document.querySelectorAll('.friend-card').forEach(card => {
+            card.onclick = () => openChat(card.dataset.phone);
+        });
     }
 
-    // Поиск и добавление друзей
+    // Поиск и добавление
     document.getElementById('searchUserBtn').onclick = async () => {
         const query = document.getElementById('globalSearch').value.trim();
         if (!query) return;
         const res = await fetch(`${API}/search_users?q=${encodeURIComponent(query)}`);
         const users = await res.json();
         const filtered = users.filter(u => u.phone !== currentUser.phone);
-        let html = `<div style="margin-top: 12px;"><strong>🔍 РЕЗУЛЬТАТЫ</strong></div>`;
+        let html = `<div style="margin:12px 0 8px;"><strong>🔍 РЕЗУЛЬТАТЫ</strong></div>`;
         for (let u of filtered) {
             const isFriend = currentFriends.some(f => f.friend_phone === u.phone);
-            html += `<div class="friend-card" style="justify-content: space-between;"><div style="display:flex; align-items:center; gap:14px;"><div class="avatar">👤</div><div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div></div>${!isFriend ? `<button class="small-btn" data-add="${u.phone}" style="margin:0;">➕ ДОБАВИТЬ</button>` : '<span style="opacity:0.5;">✓ друг</span>'}</div>`;
+            html += `<div class="friend-card" style="justify-content:space-between;">
+                        <div style="display:flex; align-items:center; gap:14px;">
+                            <div class="avatar">👤</div>
+                            <div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div>
+                        </div>
+                        ${!isFriend ? `<button class="small-btn" data-add="${u.phone}">➕ ДОБАВИТЬ</button>` : '<span style="opacity:0.5;">✓ друг</span>'}
+                    </div>`;
         }
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        friendsPanel.prepend(tempDiv);
-        tempDiv.querySelectorAll('[data-add]').forEach(btn => {
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        friendsPanel.prepend(temp);
+        temp.querySelectorAll('[data-add]').forEach(btn => {
             btn.onclick = async (e) => {
                 const friendPhone = btn.dataset.add;
                 await fetch(`${API}/add_friend`, {
@@ -470,12 +417,12 @@
         const data = await res.json();
         const container = document.getElementById('globalMessages');
         if (!container) return;
-        let msgHtml = '';
+        let html = '';
         for (let m of data.messages || []) {
             const isOut = m.from === currentUser.phone;
-            msgHtml += `<div class="message ${isOut ? 'my-message' : 'their-message'}">${escapeHtml(m.text)}<div class="msg-time">${new Date(m.time).toLocaleTimeString()}</div></div>`;
+            html += `<div class="message ${isOut ? 'my-message' : 'their-message'}">${escapeHtml(m.text)}<div class="msg-time">${new Date(m.time).toLocaleTimeString()}</div></div>`;
         }
-        container.innerHTML = msgHtml;
+        container.innerHTML = html;
         container.scrollTop = container.scrollHeight;
     }
 
@@ -489,31 +436,32 @@
     }
 
     function showGlobalChat() {
-        globalPanel.innerHTML = `<div id="globalMessages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:8px 4px 20px; height:55vh;"></div><div style="display:flex; gap:8px; background:rgba(255,255,255,0.04); border-radius:50px; padding:6px 6px 6px 20px; margin-top:12px;"><input type="text" id="globalMsgInput" placeholder="Сообщение в общий чат..." style="flex:1; background:transparent; border:none; padding:12px 0; color:white;"><button id="globalSendBtn" style="width:48px; height:48px; margin:0; padding:0; font-size:22px;">➤</button></div>`;
+        globalPanel.innerHTML = `<div id="globalMessages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding:8px 4px; height:55vh;"></div>
+            <div class="input-line"><input type="text" id="globalMsgInput" placeholder="Сообщение в общий чат..."><button id="globalSendBtn">➤</button></div>`;
         loadGlobalMessages();
         document.getElementById('globalSendBtn').onclick = () => {
             const inp = document.getElementById('globalMsgInput');
             if (inp.value.trim()) sendGlobalMessage(inp.value.trim());
             inp.value = '';
         };
-        if (window.globalInterval) clearInterval(window.globalInterval);
-        window.globalInterval = setInterval(loadGlobalMessages, 5000);
+        if (window.glbInterval) clearInterval(window.glbInterval);
+        window.glbInterval = setInterval(loadGlobalMessages, 4000);
     }
 
     // Личный чат
-    async function openChatWith(phone) {
+    async function openChat(phone) {
         activeChat = phone;
-        const userRes = await fetch(`${API}/users`);
-        const users = await userRes.json();
+        const usersRes = await fetch(`${API}/users`);
+        const users = await usersRes.json();
         const partner = users.find(u => u.phone === phone);
         dialogNameSpan.innerText = partner ? partner.username : phone;
-        const statusObj = await getUserStatus(phone, true);
-        dialogStatusSpan.innerText = statusObj.text;
+        const status = await getUserStatus(phone, true);
+        dialogStatusSpan.innerText = status.text;
         mainDiv.classList.add('hidden');
         chatDiv.classList.remove('hidden');
         await loadPrivateMessages();
-        if (pollingChat) clearInterval(pollingChat);
-        pollingChat = setInterval(loadPrivateMessages, 4000);
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(loadPrivateMessages, 4000);
     }
 
     async function loadPrivateMessages() {
@@ -539,7 +487,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ from_phone: currentUser.phone, to_phone: activeChat, text, message_type: 'text' })
         });
-        loadPrivateMessages();
+        await loadPrivateMessages();
     }
 
     document.getElementById('sendMsgBtn').onclick = () => {
@@ -548,7 +496,7 @@
         inp.value = '';
     };
     document.getElementById('closeChatBtn').onclick = () => {
-        if (pollingChat) clearInterval(pollingChat);
+        if (pollingInterval) clearInterval(pollingInterval);
         chatDiv.classList.add('hidden');
         mainDiv.classList.remove('hidden');
         activeChat = null;
@@ -562,7 +510,7 @@
             globalPanel.classList.add('hidden');
             friendsPanel.classList.remove('hidden');
             renderFriendsList();
-            if (window.globalInterval) clearInterval(window.globalInterval);
+            if (window.glbInterval) clearInterval(window.glbInterval);
         } else {
             friendsPanel.classList.add('hidden');
             globalPanel.classList.remove('hidden');
@@ -571,6 +519,15 @@
     }
     document.getElementById('tabFriendsBtn').onclick = () => switchTab('friends');
     document.getElementById('tabGlobalBtn').onclick = () => switchTab('global');
+
+    async function startApp() {
+        document.getElementById('myName').innerText = currentUser.username;
+        loginDiv.classList.add('hidden');
+        mainDiv.classList.remove('hidden');
+        await updateOnline();
+        await renderFriendsList();
+        switchTab('friends');
+    }
 
     function escapeHtml(str) {
         if (!str) return '';

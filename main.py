@@ -117,7 +117,6 @@ HTML_PAGE = """
             position: relative;
             overflow: hidden;
         }
-        /* Контентные страницы */
         .page {
             flex: 1;
             overflow-y: auto;
@@ -132,7 +131,6 @@ HTML_PAGE = """
             from { opacity: 0; transform: translateX(20px); }
             to { opacity: 1; transform: translateX(0); }
         }
-        /* Нижнее меню */
         .bottom-menu {
             background: rgba(20, 20, 30, 0.95);
             backdrop-filter: blur(20px);
@@ -164,7 +162,6 @@ HTML_PAGE = """
         .menu-item.active .menu-label {
             color: #7C3AED;
         }
-        /* Шапка */
         .header {
             padding: 16px 20px;
             border-bottom: 0.5px solid rgba(255,255,255,0.08);
@@ -186,7 +183,6 @@ HTML_PAGE = """
             border-radius: 30px;
             font-size: 12px;
         }
-        /* Общие стили */
         input {
             width: 100%;
             padding: 14px 16px;
@@ -312,14 +308,14 @@ HTML_PAGE = """
             <div style="font-size: 32px; font-weight: 700;">LUXA</div>
             <div style="font-size: 12px; opacity: 0.5;">PREMIUM MESSENGER</div>
         </div>
-        <div class="input-group" style="margin-bottom: 16px;">
+        <div style="margin-bottom: 16px;">
             <input type="tel" id="loginPhone" placeholder="Телефон">
         </div>
-        <div class="input-group" style="margin-bottom: 16px;">
+        <div style="margin-bottom: 16px;">
             <input type="text" id="loginName" placeholder="Имя">
         </div>
         <button id="doLoginBtn" style="margin-bottom: 20px;">ВОЙТИ</button>
-        <div class="input-group" style="margin-bottom: 16px;">
+        <div style="margin-bottom: 16px;">
             <input type="text" id="newNick" placeholder="Новый ник">
         </div>
         <button id="updateProfileBtn" style="background: transparent; border: 1px solid rgba(255,255,255,0.2);">ОБНОВИТЬ ПРОФИЛЬ</button>
@@ -334,7 +330,6 @@ HTML_PAGE = """
             <div class="profile-badge" id="userNameDisplay"></div>
         </div>
 
-        <!-- Страницы -->
         <div id="chatsPage" class="page active">
             <div class="flex-between">
                 <div style="font-weight: 600;">💬 ЧАТЫ</div>
@@ -359,7 +354,6 @@ HTML_PAGE = """
             </div>
         </div>
 
-        <!-- Экран чата (отдельный) -->
         <div id="chatPage" class="page">
             <div style="display: flex; align-items: center; margin-bottom: 16px;">
                 <button class="back-btn" id="closeChatBtn">← Назад</button>
@@ -372,7 +366,6 @@ HTML_PAGE = """
             </div>
         </div>
 
-        <!-- Нижнее меню -->
         <div class="bottom-menu">
             <div class="menu-item active" data-page="chats">
                 <div class="menu-icon">💬</div>
@@ -396,8 +389,8 @@ HTML_PAGE = """
     let activeChat = null;
     let currentFriends = [];
     let pollingInterval = null;
+    let glbInterval = null;
 
-    // DOM
     const loginPage = document.getElementById('loginPage');
     const mainApp = document.getElementById('mainApp');
     const friendsListDiv = document.getElementById('friendsList');
@@ -407,7 +400,6 @@ HTML_PAGE = """
     const chatPartnerName = document.getElementById('chatPartnerName');
     const userNameDisplay = document.getElementById('userNameDisplay');
 
-    // Авторизация
     async function registerOrUpdate(phone, username) {
         const res = await fetch(`${API}/register`, {
             method: 'POST',
@@ -462,7 +454,6 @@ HTML_PAGE = """
         setTimeout(() => el.style.display = 'none', 3000);
     }
 
-    // Статус онлайн
     async function updateOnline() {
         if (!currentUser) return;
         try {
@@ -517,7 +508,6 @@ HTML_PAGE = """
         });
     }
 
-    // Поиск пользователей
     document.getElementById('searchBtn').onclick = async () => {
         const query = document.getElementById('searchInput').value.trim();
         if (!query) return;
@@ -550,8 +540,8 @@ HTML_PAGE = """
         });
     };
 
-    // Общий чат
     async function loadGlobalMessages() {
+        if (!globalMessagesDiv) return;
         const res = await fetch(`${API}/general_messages`);
         const data = await res.json();
         let html = '';
@@ -578,7 +568,6 @@ HTML_PAGE = """
         inp.value = '';
     };
 
-    // Личный чат
     async function openChat(phone) {
         activeChat = phone;
         const usersRes = await fetch(`${API}/users`);
@@ -629,7 +618,6 @@ HTML_PAGE = """
         renderChats();
     };
 
-    // Навигация по страницам
     function switchPage(pageId) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById(`${pageId}Page`).classList.add('active');
@@ -643,16 +631,15 @@ HTML_PAGE = """
         item.onclick = () => switchPage(item.dataset.page);
     });
 
-    // Инициализация
     async function initApp() {
         userNameDisplay.innerText = currentUser.username;
         loginPage.style.display = 'none';
         mainApp.style.display = 'flex';
-        renderChats();
+        await renderChats();
         switchPage('chats');
         updateOnline();
-        if (window.glbInterval) clearInterval(window.glbInterval);
-        window.glbInterval = setInterval(loadGlobalMessages, 5000);
+        if (glbInterval) clearInterval(glbInterval);
+        glbInterval = setInterval(loadGlobalMessages, 5000);
     }
 
     function escapeHtml(str) {
@@ -660,7 +647,6 @@ HTML_PAGE = """
         return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
     }
 
-    // Восстановление сессии
     const saved = localStorage.getItem('luxa_user');
     if (saved) {
         try {

@@ -1,151 +1,4 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from datetime import datetime
-import os
-import sqlite3
-from contextlib import contextmanager
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ========== БАЗА ДАННЫХ ==========
-DB_PATH = "luxa.db"
-
-def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS users (phone TEXT PRIMARY KEY, username TEXT, created_at TEXT)")
-        conn.execute("CREATE TABLE IF NOT EXISTS user_status (phone TEXT PRIMARY KEY, is_online INTEGER, last_seen TEXT)")
-        conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, from_phone TEXT, to_phone TEXT, text TEXT, timestamp TEXT, message_type TEXT)")
-        conn.execute("CREATE TABLE IF NOT EXISTS general_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, from_phone TEXT, text TEXT, timestamp TEXT, message_type TEXT)")
-        conn.execute("CREATE TABLE IF NOT EXISTS friends (user_phone TEXT, friend_phone TEXT, PRIMARY KEY (user_phone, friend_phone))")
-    print("✅ База данных готова")
-
-init_db()
-
-@contextmanager
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-# ========== МОДЕЛИ ==========
-class UserRegister(BaseModel): phone: str; username: str
-class MessageSend(BaseModel): from_phone: str; to_phone: str; text: str; message_type: str = "text"
-class GeneralMessageSend(BaseModel): from_phone: str; text: str; message_type: str = "text"
-class FriendAction(BaseModel): user_phone: str; friend_phone: str
-
-# ========== API ==========
-@app.post("/register")
-async def register(data: UserRegister):
-    with get_db() as db:
-        user = db.execute("SELECT * FROM users WHERE phone = ?", (data.phone,)).fetchone()
-        if user:
-            return {"status": "ok", "username": user["username"]}
-        db.execute("INSERT INTO users (phone, username, created_at) VALUES (?, ?, ?)",
-                   (data.phone, data.username, datetime.utcnow().isoformat()))
-        db.commit()
-        return {"status": "ok", "username": data.username}
-
-@app.post("/update_status")
-async def update_status(phone: str):
-    with get_db() as db:
-        db.execute("INSERT OR REPLACE INTO user_status (phone, is_online, last_seen) VALUES (?, ?, ?)",
-                   (phone, 1, datetime.utcnow().isoformat()))
-        db.commit()
-    return {"status": "ok"}
-
-@app.get("/get_status/{phone}")
-async def get_status(phone: str, viewer_phone: str = None):
-    with get_db() as db:
-        status = db.execute("SELECT * FROM user_status WHERE phone = ?", (phone,)).fetchone()
-        if not status:
-            return {"is_online": False, "last_seen_text": "неизвестно"}
-        if status["is_online"]:
-            return {"is_online": True, "last_seen_text": "онлайн"}
-        if viewer_phone:
-            friend = db.execute("SELECT * FROM friends WHERE user_phone = ? AND friend_phone = ?",
-                                (viewer_phone, phone)).fetchone()
-            if friend:
-                return {"is_online": False, "last_seen_text": "недавно"}
-        return {"is_online": False, "last_seen_text": "не в сети"}
-
-@app.post("/add_friend")
-async def add_friend(data: FriendAction):
-    with get_db() as db:
-        db.execute("INSERT OR IGNORE INTO friends (user_phone, friend_phone) VALUES (?, ?)",
-                   (data.user_phone, data.friend_phone))
-        db.commit()
-    return {"status": "ok"}
-
-@app.get("/friends/{phone}")
-async def get_friends(phone: str):
-    with get_db() as db:
-        friends = db.execute("SELECT friend_phone FROM friends WHERE user_phone = ?", (phone,)).fetchall()
-        return [{"friend_phone": f["friend_phone"]} for f in friends]
-
-@app.get("/search_users")
-async def search_users(q: str):
-    with get_db() as db:
-        users = db.execute("SELECT phone, username FROM users WHERE phone LIKE ? OR username LIKE ? LIMIT 20",
-                          (f"%{q}%", f"%{q}%")).fetchall()
-        return [{"phone": u["phone"], "username": u["username"]} for u in users]
-
-@app.post("/send")
-async def send_message(msg: MessageSend):
-    with get_db() as db:
-        db.execute("INSERT INTO messages (from_phone, to_phone, text, timestamp, message_type) VALUES (?, ?, ?, ?, ?)",
-                   (msg.from_phone, msg.to_phone, msg.text, datetime.utcnow().isoformat(), msg.message_type))
-        db.commit()
-    return {"status": "ok"}
-
-@app.get("/dialog/{phone1}/{phone2}")
-async def get_dialog(phone1: str, phone2: str):
-    with get_db() as db:
-        msgs = db.execute("""SELECT * FROM messages 
-            WHERE (from_phone = ? AND to_phone = ?) OR (from_phone = ? AND to_phone = ?)
-            ORDER BY timestamp""", (phone1, phone2, phone2, phone1)).fetchall()
-        return {"messages": [{"id": m["id"], "from": m["from_phone"], "text": m["text"], 
-                              "time": m["timestamp"], "message_type": m["message_type"]} for m in msgs]}
-
-@app.post("/send_general")
-async def send_general_message(msg: GeneralMessageSend):
-    with get_db() as db:
-        db.execute("INSERT INTO general_messages (from_phone, text, timestamp, message_type) VALUES (?, ?, ?, ?)",
-                   (msg.from_phone, msg.text, datetime.utcnow().isoformat(), msg.message_type))
-        db.commit()
-    return {"status": "ok"}
-
-@app.get("/general_messages")
-async def get_general_messages():
-    with get_db() as db:
-        msgs = db.execute("SELECT * FROM general_messages ORDER BY timestamp").fetchall()
-        users = db.execute("SELECT phone, username FROM users").fetchall()
-        users_dict = {u["phone"]: u["username"] for u in users}
-        return {"messages": [{"id": m["id"], "from": m["from_phone"], 
-                              "from_name": users_dict.get(m["from_phone"], m["from_phone"]),
-                              "text": m["text"], "time": m["timestamp"], 
-                              "message_type": m["message_type"]} for m in msgs]}
-
-@app.get("/users")
-async def get_users():
-    with get_db() as db:
-        users = db.execute("SELECT phone, username FROM users").fetchall()
-        return [{"phone": u["phone"], "username": u["username"]} for u in users]
-
-# ========== HTML СТРАНИЦА (ТОТ САМЫЙ ТОПОВЫЙ ДИЗАЙН) ==========
-HTML_PAGE = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -165,7 +18,7 @@ HTML_PAGE = """<!DOCTYPE html>
             position: relative;
         }
         
-        /* ГИПЕР-РЕАЛИСТИЧНЫЙ 3D ФОН С АЛМАЗНЫМ СИЯНИЕМ */
+        /* 3D КИНЕМАТОГРАФИЧНЫЙ ФОН */
         body::before {
             content: '';
             position: fixed;
@@ -285,7 +138,6 @@ HTML_PAGE = """<!DOCTYPE html>
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
-            letter-spacing: -0.5px;
             text-shadow: 0 0 8px rgba(255,215,0,0.3);
         }
         .profile-diamond {
@@ -328,7 +180,7 @@ HTML_PAGE = """<!DOCTYPE html>
             box-shadow: 0 8px 18px -8px rgba(0,0,0,0.4);
         }
         .info-diamond { flex: 1; }
-        .name-diamond { font-weight: 700; font-size: 17px; color: #FFF5E0; letter-spacing: -0.2px; }
+        .name-diamond { font-weight: 700; font-size: 17px; color: #FFF5E0; }
         .status-diamond { font-size: 12px; opacity: 0.7; margin-top: 4px; color: rgba(255,255,255,0.7); }
         
         /* ЛЮКСОВЫЕ СООБЩЕНИЯ */
@@ -533,7 +385,8 @@ HTML_PAGE = """<!DOCTYPE html>
 </div>
 
 <script>
-    const API = window.location.origin;
+    // ========== РАБОТА С ТВОИМ API (без изменений) ==========
+    const API = "https://social-v2-z9qu.onrender.com";
     let currentUser = null, activeChat = null, currentFriends = [], pollingChat = null, glbInt = null;
 
     async function regUser(phone, name) {
@@ -577,9 +430,19 @@ HTML_PAGE = """<!DOCTYPE html>
 
     async function updateOnline(){
         if(!currentUser) return;
-        await fetch(`${API}/update_status?phone=${currentUser.phone}`,{ method:'POST' });
+        await fetch(`${API}/update_status`,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ phone:currentUser.phone }) });
     }
     setInterval(updateOnline,25000);
+
+    async function getStatus(phone, isFriend){
+        try{
+            const url = isFriend ? `${API}/get_status/${phone}?viewer_phone=${currentUser.phone}` : `${API}/get_status/${phone}`;
+            const r=await fetch(url); const d=await r.json();
+            if(d.is_online) return '🟢 ОНЛАЙН';
+            if(isFriend && d.last_seen_text) return `⚫ ${d.last_seen_text}`;
+            return '⚫ НЕ В СЕТИ';
+        }catch(e){ return '⚫ ...'; }
+    }
 
     async function loadFriends(){
         const r=await fetch(`${API}/friends/${currentUser.phone}`); return await r.json();
@@ -592,7 +455,8 @@ HTML_PAGE = """<!DOCTYPE html>
         for(let f of friends){
             const user=allUsers.find(u=>u.phone===f.friend_phone);
             const name=user?user.username:f.friend_phone;
-            html+=`<div class="elite-card" data-phone="${f.friend_phone}"><div class="avatar-diamond">👤</div><div class="info-diamond"><div class="name-diamond">${escapeHtml(name)}</div><div class="status-diamond">💎 ЭЛИТА</div></div><div>💬</div></div>`;
+            const status=await getStatus(f.friend_phone,true);
+            html+=`<div class="elite-card" data-phone="${f.friend_phone}"><div class="avatar-diamond">👤</div><div class="info-diamond"><div class="name-diamond">${escapeHtml(name)}</div><div class="status-diamond">${status}</div></div><div>💬</div></div>`;
         }
         document.getElementById('friendsList').innerHTML = html || '<div style="text-align:center; padding:40px;">➕ Добавьте друзей в "КОНТАКТЫ"</div>';
         document.querySelectorAll('.elite-card').forEach(c=>c.onclick=()=>openChat(c.dataset.phone));
@@ -627,7 +491,8 @@ HTML_PAGE = """<!DOCTYPE html>
         let html='';
         for(let m of msgs){
             const isOut=m.from===currentUser.phone;
-            html+=`<div class="luxury-message ${isOut?'msg-out':'msg-in'}">${escapeHtml(m.text)}<div class="msg-footer"><span class="delivered-icon">✓ доставлено</span></div></div>`;
+            const senderName = !isOut ? `<div style="font-size: 11px; opacity:0.7; margin-bottom: 4px;">${escapeHtml(m.from_name)}</div>` : '';
+            html+=`${senderName}<div class="luxury-message ${isOut?'msg-out':'msg-in'}">${escapeHtml(m.text)}<div class="msg-footer"><span class="delivered-icon">✓ доставлено</span></div></div>`;
         }
         container.innerHTML=html;
         if(wasBottom) container.scrollTop=container.scrollHeight;
@@ -703,14 +568,4 @@ HTML_PAGE = """<!DOCTYPE html>
     }
 </script>
 </body>
-</html>"""
-
-@app.get("/")
-@app.get("/web")
-async def serve_index():
-    return HTMLResponse(content=HTML_PAGE)
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=port)
+</html>

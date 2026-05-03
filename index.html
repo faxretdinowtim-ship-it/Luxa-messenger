@@ -138,7 +138,7 @@
         .success { background: #10b981; margin-top: 16px; text-align: center; padding: 12px; border-radius: 40px; display: none; }
         .error { background: #ef4444; margin-top: 16px; text-align: center; padding: 12px; border-radius: 40px; display: none; }
 
-        /* Экран чатов (будет позже) */
+        /* карточки контактов/чатов */
         .friend-card {
             background: rgba(255,255,255,0.04);
             border-radius: 32px;
@@ -149,7 +149,9 @@
             gap: 14px;
             cursor: pointer;
             border: 0.5px solid rgba(255,255,255,0.05);
+            transition: 0.2s;
         }
+        .friend-card:active { background: rgba(255,255,255,0.08); transform: scale(0.98); }
         .avatar {
             width: 52px;
             height: 52px;
@@ -162,7 +164,11 @@
         }
         .info { flex: 1; }
         .name { font-weight: 700; font-size: 16px; }
-        .status { font-size: 12px; opacity: 0.6; margin-top: 4px; }
+        .status {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
         .online-dot {
             display: inline-block;
             width: 8px;
@@ -172,6 +178,31 @@
             margin-right: 6px;
             box-shadow: 0 0 4px #4ade80;
         }
+
+        /* сообщения */
+        .message {
+            max-width: 80%;
+            padding: 10px 16px;
+            border-radius: 26px;
+            font-size: 14px;
+            animation: msgPop 0.25s ease;
+        }
+        @keyframes msgPop {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .my-message {
+            background: #7C3AED;
+            align-self: flex-end;
+            border-bottom-right-radius: 6px;
+        }
+        .their-message {
+            background: rgba(255,255,255,0.08);
+            align-self: flex-start;
+            border-bottom-left-radius: 6px;
+        }
+        .msg-time { font-size: 9px; opacity: 0.5; margin-top: 4px; text-align: right; }
+
         .search-row {
             display: flex;
             gap: 10px;
@@ -187,6 +218,14 @@
             cursor: pointer;
             display: inline-block;
             margin-right: 12px;
+        }
+        .back-btn {
+            width: 42px;
+            height: 42px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 30px;
+            font-size: 24px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -220,7 +259,7 @@
         <div id="errorMsg" class="error"></div>
     </div>
 
-    <!-- ОСНОВНОЙ ЭКРАН (будет заполняться после входа) -->
+    <!-- ОСНОВНОЙ ЭКРАН -->
     <div id="mainScreen" class="screen hidden">
         <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
             <div class="logo-text" style="font-size: 24px;">💬 ЧАТЫ</div>
@@ -238,10 +277,10 @@
         <div id="globalChatPanel" class="hidden"></div>
     </div>
 
-    <!-- ЭКРАН ЧАТА (будет позже) -->
+    <!-- ЭКРАН ЧАТА -->
     <div id="chatDialog" class="screen hidden">
         <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 20px;">
-            <button class="back-btn" id="closeChatBtn" style="width:42px; height:42px; background:rgba(255,255,255,0.06); border-radius:30px; font-size:24px;">←</button>
+            <button class="back-btn" id="closeChatBtn">←</button>
             <div style="flex:1"><strong id="dialogName"></strong><div id="dialogStatus" class="status"></div></div>
         </div>
         <div id="chatMessages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:8px 4px 20px;"></div>
@@ -259,6 +298,7 @@
     let activeChat = null;
     let currentFriends = [];
     let pollingChat = null;
+    let currentTab = 'friends';
 
     // DOM элементы
     const loginDiv = document.getElementById('loginScreen');
@@ -312,11 +352,7 @@
             currentUser = { phone, username: finalName };
             localStorage.setItem('luxa_user', JSON.stringify(currentUser));
             showSuccess(`✅ Добро пожаловать, ${finalName}!`);
-            
-            // Переход в основной интерфейс
-            setTimeout(async () => {
-                await startApp();
-            }, 1000);
+            setTimeout(async () => { await startApp(); }, 1000);
         } catch (err) {
             showError('Ошибка: ' + err.message);
         }
@@ -325,20 +361,11 @@
     // Обновление профиля
     document.getElementById('updateProfileBtn').onclick = async () => {
         const newNick = document.getElementById('newNick').value.trim();
-        
-        if (!newNick) {
-            showError('Введите новый ник');
-            return;
-        }
+        if (!newNick) { showError('Введите новый ник'); return; }
 
         let phone = currentUser?.phone;
-        if (!phone) {
-            phone = document.getElementById('loginPhone').value.trim();
-        }
-        if (!phone) {
-            showError('Сначала войдите в аккаунт');
-            return;
-        }
+        if (!phone) phone = document.getElementById('loginPhone').value.trim();
+        if (!phone) { showError('Сначала войдите в аккаунт'); return; }
 
         try {
             const newName = await registerOrUpdate(phone, newNick);
@@ -362,12 +389,9 @@
         await updateOnline();
         await renderFriendsList();
         switchTab('friends');
-        
-        // Запрашиваем уведомления
         if (Notification.permission === 'default') Notification.requestPermission();
     }
 
-    // Статус онлайн
     async function updateOnline() {
         if (!currentUser) return;
         await fetch(`${API}/update_status`, {
@@ -378,7 +402,6 @@
     }
     setInterval(updateOnline, 25000);
 
-    // Получить статус пользователя
     async function getUserStatus(phone, isFriend) {
         try {
             const url = isFriend ? `${API}/get_status/${phone}?viewer_phone=${currentUser.phone}` : `${API}/get_status/${phone}`;
@@ -390,7 +413,6 @@
         } catch { return { text: '…', online: false }; }
     }
 
-    // Друзья
     async function loadFriendsList() {
         const res = await fetch(`${API}/friends/${currentUser.phone}`);
         const data = await res.json();
@@ -407,50 +429,27 @@
             const user = allUsers.find(u => u.phone === f.friend_phone);
             const name = user ? user.username : f.friend_phone;
             const status = await getUserStatus(f.friend_phone, true);
-            html += `
-                <div class="friend-card" data-phone="${f.friend_phone}">
-                    <div class="avatar">👤</div>
-                    <div class="info">
-                        <div class="name">${escapeHtml(name)}</div>
-                        <div class="status">${status.online ? '🟢 ' + status.text : '⚫ ' + status.text}</div>
-                    </div>
-                    <div>💬</div>
-                </div>
-            `;
+            html += `<div class="friend-card" data-phone="${f.friend_phone}"><div class="avatar">👤</div><div class="info"><div class="name">${escapeHtml(name)}</div><div class="status">${status.online ? '🟢 ' + status.text : '⚫ ' + status.text}</div></div><div>💬</div></div>`;
         }
         friendsPanel.innerHTML = html || '<div style="text-align:center; opacity:0.6;">➕ Добавьте друзей через поиск</div>';
-        
-        document.querySelectorAll('.friend-card').forEach(card => {
-            card.onclick = () => openChatWith(card.dataset.phone);
-        });
+        document.querySelectorAll('.friend-card').forEach(card => { card.onclick = () => openChatWith(card.dataset.phone); });
     }
 
     // Поиск и добавление друзей
     document.getElementById('searchUserBtn').onclick = async () => {
         const query = document.getElementById('globalSearch').value.trim();
         if (!query) return;
-        
         const res = await fetch(`${API}/search_users?q=${encodeURIComponent(query)}`);
         const users = await res.json();
         const filtered = users.filter(u => u.phone !== currentUser.phone);
-        
         let html = `<div style="margin-top: 12px;"><strong>🔍 РЕЗУЛЬТАТЫ</strong></div>`;
         for (let u of filtered) {
             const isFriend = currentFriends.some(f => f.friend_phone === u.phone);
-            html += `
-                <div class="friend-card" style="justify-content: space-between;">
-                    <div style="display:flex; align-items:center; gap:14px;">
-                        <div class="avatar">👤</div>
-                        <div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div>
-                    </div>
-                    ${!isFriend ? `<button class="small-btn" data-add="${u.phone}" style="margin:0;">➕ ДОБАВИТЬ</button>` : '<span style="opacity:0.5;">✓ друг</span>'}
-                </div>
-            `;
+            html += `<div class="friend-card" style="justify-content: space-between;"><div style="display:flex; align-items:center; gap:14px;"><div class="avatar">👤</div><div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div></div>${!isFriend ? `<button class="small-btn" data-add="${u.phone}" style="margin:0;">➕ ДОБАВИТЬ</button>` : '<span style="opacity:0.5;">✓ друг</span>'}</div>`;
         }
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
         friendsPanel.prepend(tempDiv);
-        
         tempDiv.querySelectorAll('[data-add]').forEach(btn => {
             btn.onclick = async (e) => {
                 const friendPhone = btn.dataset.add;
@@ -490,13 +489,7 @@
     }
 
     function showGlobalChat() {
-        globalPanel.innerHTML = `
-            <div id="globalMessages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:8px 4px 20px; height:55vh;"></div>
-            <div style="display:flex; gap:8px; background:rgba(255,255,255,0.04); border-radius:50px; padding:6px 6px 6px 20px; margin-top:12px;">
-                <input type="text" id="globalMsgInput" placeholder="Сообщение в общий чат..." style="flex:1; background:transparent; border:none; padding:12px 0; color:white;">
-                <button id="globalSendBtn" style="width:48px; height:48px; margin:0; padding:0; font-size:22px;">➤</button>
-            </div>
-        `;
+        globalPanel.innerHTML = `<div id="globalMessages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:8px 4px 20px; height:55vh;"></div><div style="display:flex; gap:8px; background:rgba(255,255,255,0.04); border-radius:50px; padding:6px 6px 6px 20px; margin-top:12px;"><input type="text" id="globalMsgInput" placeholder="Сообщение в общий чат..." style="flex:1; background:transparent; border:none; padding:12px 0; color:white;"><button id="globalSendBtn" style="width:48px; height:48px; margin:0; padding:0; font-size:22px;">➤</button></div>`;
         loadGlobalMessages();
         document.getElementById('globalSendBtn').onclick = () => {
             const inp = document.getElementById('globalMsgInput');
@@ -516,7 +509,6 @@
         dialogNameSpan.innerText = partner ? partner.username : phone;
         const statusObj = await getUserStatus(phone, true);
         dialogStatusSpan.innerText = statusObj.text;
-        
         mainDiv.classList.add('hidden');
         chatDiv.classList.remove('hidden');
         await loadPrivateMessages();
@@ -555,7 +547,6 @@
         if (inp.value.trim()) sendPrivateMessage(inp.value.trim());
         inp.value = '';
     };
-
     document.getElementById('closeChatBtn').onclick = () => {
         if (pollingChat) clearInterval(pollingChat);
         chatDiv.classList.add('hidden');
@@ -565,8 +556,6 @@
         else switchTab('global');
     };
 
-    // Переключение вкладок
-    let currentTab = 'friends';
     function switchTab(tab) {
         currentTab = tab;
         if (tab === 'friends') {

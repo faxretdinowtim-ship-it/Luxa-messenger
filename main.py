@@ -1,13 +1,11 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime
 import os
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, select, or_
-import uvicorn
+import sqlite3
+from contextlib import contextmanager
 
 app = FastAPI()
 
@@ -19,71 +17,134 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    DATABASE_URL = "sqlite+aiosqlite:///./luxa.db"
-else:
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+# ========== БАЗА ДАННЫХ ==========
+DB_PATH = "luxa.db"
 
-engine = create_async_engine(DATABASE_URL, echo=False)
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-Base = declarative_base()
+def init_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS users (phone TEXT PRIMARY KEY, username TEXT, created_at TEXT)")
+        conn.execute("CREATE TABLE IF NOT EXISTS user_status (phone TEXT PRIMARY KEY, is_online INTEGER, last_seen TEXT)")
+        conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, from_phone TEXT, to_phone TEXT, text TEXT, timestamp TEXT, message_type TEXT)")
+        conn.execute("CREATE TABLE IF NOT EXISTS general_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, from_phone TEXT, text TEXT, timestamp TEXT, message_type TEXT)")
+        conn.execute("CREATE TABLE IF NOT EXISTS friends (user_phone TEXT, friend_phone TEXT, PRIMARY KEY (user_phone, friend_phone))")
+    print("✅ База данных готова")
 
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    phone = Column(String(20), unique=True, nullable=False)
-    username = Column(String(50), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+init_db()
 
-class UserStatus(Base):
-    __tablename__ = "user_status"
-    id = Column(Integer, primary_key=True)
-    phone = Column(String(20), unique=True, nullable=False)
-    is_online = Column(Boolean, default=False)
-    last_seen = Column(DateTime, default=datetime.utcnow)
+@contextmanager
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
 
-class Message(Base):
-    __tablename__ = "messages"
-    id = Column(Integer, primary_key=True)
-    from_phone = Column(String(20), nullable=False)
-    to_phone = Column(String(20), nullable=False)
-    text = Column(Text, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    message_type = Column(String(20), default="text")
-    is_read = Column(Boolean, default=False)
-
-class GeneralMessage(Base):
-    __tablename__ = "general_messages"
-    id = Column(Integer, primary_key=True)
-    from_phone = Column(String(20), nullable=False)
-    text = Column(Text, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    message_type = Column(String(20), default="text")
-
-class Friend(Base):
-    __tablename__ = "friends"
-    id = Column(Integer, primary_key=True)
-    user_phone = Column(String(20), nullable=False)
-    friend_phone = Column(String(20), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-class PhoneRequest(BaseModel): phone: str
+# ========== МОДЕЛИ ==========
 class UserRegister(BaseModel): phone: str; username: str
 class MessageSend(BaseModel): from_phone: str; to_phone: str; text: str; message_type: str = "text"
 class GeneralMessageSend(BaseModel): from_phone: str; text: str; message_type: str = "text"
 class FriendAction(BaseModel): user_phone: str; friend_phone: str
 
-async def get_db():
-    async with AsyncSessionLocal() as session:
-        yield session
+# ========== API ==========
+@app.post("/register")
+async def register(data: UserRegister):
+    with get_db() as db:
+        user = db.execute("SELECT * FROM users WHERE phone = ?", (data.phone,)).fetchone()
+        if user:
+            return {"status": "ok", "username": user["username"]}
+        db.execute("INSERT INTO users (phone, username, created_at) VALUES (?, ?, ?)",
+                   (data.phone, data.username, datetime.utcnow().isoformat()))
+        db.commit()
+        return {"status": "ok", "username": data.username}
 
-@app.on_event("startup")
-async def startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("✅ Сервер запущен")
+@app.post("/update_status")
+async def update_status(phone: str):
+    with get_db() as db:
+        db.execute("INSERT OR REPLACE INTO user_status (phone, is_online, last_seen) VALUES (?, ?, ?)",
+                   (phone, 1, datetime.utcnow().isoformat()))
+        db.commit()
+    return {"status": "ok"}
 
+@app.get("/get_status/{phone}")
+async def get_status(phone: str, viewer_phone: str = None):
+    with get_db() as db:
+        status = db.execute("SELECT * FROM user_status WHERE phone = ?", (phone,)).fetchone()
+        if not status:
+            return {"is_online": False, "last_seen_text": "неизвестно"}
+        if status["is_online"]:
+            return {"is_online": True, "last_seen_text": "онлайн"}
+        if viewer_phone:
+            friend = db.execute("SELECT * FROM friends WHERE user_phone = ? AND friend_phone = ?",
+                                (viewer_phone, phone)).fetchone()
+            if friend:
+                return {"is_online": False, "last_seen_text": "недавно"}
+        return {"is_online": False, "last_seen_text": "не в сети"}
+
+@app.post("/add_friend")
+async def add_friend(data: FriendAction):
+    with get_db() as db:
+        db.execute("INSERT OR IGNORE INTO friends (user_phone, friend_phone) VALUES (?, ?)",
+                   (data.user_phone, data.friend_phone))
+        db.commit()
+    return {"status": "ok"}
+
+@app.get("/friends/{phone}")
+async def get_friends(phone: str):
+    with get_db() as db:
+        friends = db.execute("SELECT friend_phone FROM friends WHERE user_phone = ?", (phone,)).fetchall()
+        return [{"friend_phone": f["friend_phone"]} for f in friends]
+
+@app.get("/search_users")
+async def search_users(q: str):
+    with get_db() as db:
+        users = db.execute("SELECT phone, username FROM users WHERE phone LIKE ? OR username LIKE ? LIMIT 20",
+                          (f"%{q}%", f"%{q}%")).fetchall()
+        return [{"phone": u["phone"], "username": u["username"]} for u in users]
+
+@app.post("/send")
+async def send_message(msg: MessageSend):
+    with get_db() as db:
+        db.execute("INSERT INTO messages (from_phone, to_phone, text, timestamp, message_type) VALUES (?, ?, ?, ?, ?)",
+                   (msg.from_phone, msg.to_phone, msg.text, datetime.utcnow().isoformat(), msg.message_type))
+        db.commit()
+    return {"status": "ok"}
+
+@app.get("/dialog/{phone1}/{phone2}")
+async def get_dialog(phone1: str, phone2: str):
+    with get_db() as db:
+        msgs = db.execute("""SELECT * FROM messages 
+            WHERE (from_phone = ? AND to_phone = ?) OR (from_phone = ? AND to_phone = ?)
+            ORDER BY timestamp""", (phone1, phone2, phone2, phone1)).fetchall()
+        return {"messages": [{"id": m["id"], "from": m["from_phone"], "text": m["text"], 
+                              "time": m["timestamp"], "message_type": m["message_type"]} for m in msgs]}
+
+@app.post("/send_general")
+async def send_general_message(msg: GeneralMessageSend):
+    with get_db() as db:
+        db.execute("INSERT INTO general_messages (from_phone, text, timestamp, message_type) VALUES (?, ?, ?, ?)",
+                   (msg.from_phone, msg.text, datetime.utcnow().isoformat(), msg.message_type))
+        db.commit()
+    return {"status": "ok"}
+
+@app.get("/general_messages")
+async def get_general_messages():
+    with get_db() as db:
+        msgs = db.execute("SELECT * FROM general_messages ORDER BY timestamp").fetchall()
+        users = db.execute("SELECT phone, username FROM users").fetchall()
+        users_dict = {u["phone"]: u["username"] for u in users}
+        return {"messages": [{"id": m["id"], "from": m["from_phone"], 
+                              "from_name": users_dict.get(m["from_phone"], m["from_phone"]),
+                              "text": m["text"], "time": m["timestamp"], 
+                              "message_type": m["message_type"]} for m in msgs]}
+
+@app.get("/users")
+async def get_users():
+    with get_db() as db:
+        users = db.execute("SELECT phone, username FROM users").fetchall()
+        return [{"phone": u["phone"], "username": u["username"]} for u in users]
+
+# ========== HTML СТРАНИЦА (ТОТ САМЫЙ ТОПОВЫЙ ДИЗАЙН) ==========
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -115,16 +176,15 @@ HTML_PAGE = """<!DOCTYPE html>
             background: 
                 radial-gradient(ellipse at 20% 25%, rgba(139, 92, 246, 0.3), transparent 70%),
                 radial-gradient(ellipse at 85% 70%, rgba(99, 102, 241, 0.25), transparent 60%),
-                radial-gradient(ellipse at 50% 50%, rgba(255,215,0,0.08), transparent 80%),
-                repeating-linear-gradient(45deg, rgba(255,215,0,0.03) 0px, rgba(255,215,0,0.03) 2px, transparent 2px, transparent 12px);
+                radial-gradient(ellipse at 50% 50%, rgba(255,215,0,0.08), transparent 80%);
             z-index: -3;
             animation: cosmicDrift 30s ease infinite;
         }
         
         @keyframes cosmicDrift {
-            0%, 100% { transform: translate(0,0) scale(1) rotate(0deg); }
-            33% { transform: translate(0.8%, -0.5%) scale(1.01) rotate(0.5deg); }
-            66% { transform: translate(-0.3%, 0.4%) scale(0.99) rotate(-0.3deg); }
+            0%, 100% { transform: translate(0,0) scale(1); }
+            33% { transform: translate(0.8%, -0.5%) scale(1.01); }
+            66% { transform: translate(-0.3%, 0.4%) scale(0.99); }
         }
         
         body::after {
@@ -139,7 +199,7 @@ HTML_PAGE = """<!DOCTYPE html>
             pointer-events: none;
         }
         
-        /* ПРЕМИУМ СТЕКЛЯННЫЙ КОНТЕЙНЕР С ЗОЛОТОЙ ОБВОДКОЙ */
+        /* ПРЕМИУМ СТЕКЛЯННЫЙ КОНТЕЙНЕР */
         .app {
             width: 100%;
             max-width: 480px;
@@ -151,10 +211,7 @@ HTML_PAGE = """<!DOCTYPE html>
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            box-shadow: 
-                0 45px 75px -35px rgba(0,0,0,0.7),
-                0 0 0 1.5px rgba(255,215,0,0.2),
-                inset 0 1px 0 rgba(255,255,255,0.08);
+            box-shadow: 0 45px 75px -35px rgba(0,0,0,0.7), 0 0 0 1.5px rgba(255,215,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
             animation: glassAscend 0.6s cubic-bezier(0.16,1,0.3,1);
         }
         
@@ -163,7 +220,6 @@ HTML_PAGE = """<!DOCTYPE html>
             to { opacity: 1; transform: translateY(0) scale(1); backdrop-filter: blur(40px) saturate(200%); }
         }
         
-        /* СТРАНИЦЫ С ПЛАВНЫМ ПОЯВЛЕНИЕМ */
         .page {
             flex: 1;
             overflow-y: auto;
@@ -275,7 +331,7 @@ HTML_PAGE = """<!DOCTYPE html>
         .name-diamond { font-weight: 700; font-size: 17px; color: #FFF5E0; letter-spacing: -0.2px; }
         .status-diamond { font-size: 12px; opacity: 0.7; margin-top: 4px; color: rgba(255,255,255,0.7); }
         
-        /* СООБЩЕНИЯ ЛЮКСОВОГО КЛАССА */
+        /* ЛЮКСОВЫЕ СООБЩЕНИЯ */
         .luxury-message {
             max-width: 80%;
             padding: 12px 20px;
@@ -313,9 +369,7 @@ HTML_PAGE = """<!DOCTYPE html>
             font-size: 9px;
             opacity: 0.6;
         }
-        .msg-time { font-family: monospace; }
         .delivered-icon { color: #4ade80; }
-        .read-icon { color: #FFD700; }
         
         /* ПРЕМИУМ ПОЛЯ ВВОДА */
         .input-premium {
@@ -327,7 +381,6 @@ HTML_PAGE = """<!DOCTYPE html>
             margin: 12px;
             border: 0.5px solid rgba(255,215,0,0.25);
             backdrop-filter: blur(15px);
-            transition: all 0.2s;
         }
         .input-premium:focus-within {
             border-color: #FFD700;
@@ -355,7 +408,6 @@ HTML_PAGE = """<!DOCTYPE html>
         }
         .input-premium button:active { transform: scale(0.94); }
         
-        /* ОБЩИЕ ЭЛЕМЕНТЫ */
         input, button { width: 100%; }
         input {
             padding: 16px 20px;
@@ -365,12 +417,8 @@ HTML_PAGE = """<!DOCTYPE html>
             color: white;
             font-size: 15px;
             outline: none;
-            transition: all 0.2s;
         }
-        input:focus {
-            border-color: #FFD700;
-            box-shadow: 0 0 12px rgba(255,215,0,0.2);
-        }
+        input:focus { border-color: #FFD700; box-shadow: 0 0 12px rgba(255,215,0,0.2); }
         button {
             background: linear-gradient(135deg, #8B5CF6, #6366F1);
             border: none;
@@ -405,7 +453,8 @@ HTML_PAGE = """<!DOCTYPE html>
             font-weight: 600;
             color: #FFD700;
             cursor: pointer;
-            transition: 0.2s;
+            display: inline-block;
+            margin-bottom: 16px;
         }
         .back-gold:active { transform: scale(0.96); }
         
@@ -420,16 +469,12 @@ HTML_PAGE = """<!DOCTYPE html>
         .success { background: #10b981; box-shadow: 0 0 15px #10b98140; }
         .error { background: #ef4444; }
         .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .messages-scroll { height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+        .scroll-area { height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
         .hidden { display: none; }
         
         ::-webkit-scrollbar { width: 3px; }
-        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 10px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
         ::-webkit-scrollbar-thumb { background: #FFD700; border-radius: 10px; box-shadow: 0 0 5px #FFD700; }
-        
-        /* СТИЛИ ДЛЯ ЧАТА (фикс смещения) */
-        #chatMessagesArea { height: 60vh; }
-        .page > div:first-child { margin-bottom: 0; }
     </style>
 </head>
 <body>
@@ -443,9 +488,9 @@ HTML_PAGE = """<!DOCTYPE html>
         </div>
         <input type="tel" id="loginPhone" placeholder="ТЕЛЕФОН" style="margin-bottom: 12px;">
         <input type="text" id="loginName" placeholder="ИМЯ" style="margin-bottom: 20px;">
-        <button id="doLoginBtn">ВОЙТИ В LUXA</button>
+        <button id="doLoginBtn">ВОЙТИ</button>
         <input type="text" id="newNick" placeholder="НОВЫЙ НИК" style="margin-top: 20px;">
-        <button id="updateProfileBtn" style="background: transparent; border: 1px solid rgba(255,215,0,0.4);">ОБНОВИТЬ ПРОФИЛЬ</button>
+        <button id="updateProfileBtn" style="background: transparent; border: 1px solid rgba(255,215,0,0.4);">ОБНОВИТЬ</button>
         <div id="successMsg" class="success"></div>
         <div id="errorMsg" class="error"></div>
     </div>
@@ -468,16 +513,14 @@ HTML_PAGE = """<!DOCTYPE html>
 
         <div id="globalPage" class="page">
             <div style="font-weight: 700; color: #FFD700; font-size: 18px; margin-bottom: 16px;">🌍 ОБЩИЙ ЧАТ</div>
-            <div id="globalMessages" class="messages-scroll"></div>
+            <div id="globalMessages" class="scroll-area"></div>
             <div class="input-premium"><input type="text" id="globalMsgInput" placeholder="Сообщение в общий чат..."><button id="globalSendBtn">➤</button></div>
         </div>
 
         <div id="chatPage" class="page">
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-                <div class="back-gold" id="closeChatBtn">← НАЗАД</div>
-                <div style="flex:1; text-align: center; font-weight: 700; font-size: 18px; color: #FFD700;" id="chatPartnerName"></div>
-            </div>
-            <div id="chatMessagesArea" class="messages-scroll" style="height: 60vh;"></div>
+            <div class="back-gold" id="closeChatBtn">← НАЗАД</div>
+            <div style="text-align: center; font-weight: 700; font-size: 18px; color: #FFD700; margin-bottom: 16px;" id="chatPartnerName"></div>
+            <div id="chatMessagesArea" class="scroll-area" style="height: 55vh;"></div>
             <div class="input-premium"><input type="text" id="chatMsgInput" placeholder="Сообщение..."><button id="sendChatMsgBtn">➤</button></div>
         </div>
 
@@ -534,19 +577,9 @@ HTML_PAGE = """<!DOCTYPE html>
 
     async function updateOnline(){
         if(!currentUser) return;
-        await fetch(`${API}/update_status`,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ phone:currentUser.phone }) });
+        await fetch(`${API}/update_status?phone=${currentUser.phone}`,{ method:'POST' });
     }
     setInterval(updateOnline,25000);
-    
-    async function getStatus(phone, isFriend){
-        try{
-            const url = isFriend ? `${API}/get_status/${phone}?viewer_phone=${currentUser.phone}` : `${API}/get_status/${phone}`;
-            const r=await fetch(url); const d=await r.json();
-            if(d.is_online) return '🟢 ОНЛАЙН';
-            if(isFriend && d.last_seen_text) return `⚫ ${d.last_seen_text}`;
-            return '⚫ НЕ В СЕТИ';
-        }catch(e){ return '⚫ ...'; }
-    }
 
     async function loadFriends(){
         const r=await fetch(`${API}/friends/${currentUser.phone}`); return await r.json();
@@ -559,8 +592,7 @@ HTML_PAGE = """<!DOCTYPE html>
         for(let f of friends){
             const user=allUsers.find(u=>u.phone===f.friend_phone);
             const name=user?user.username:f.friend_phone;
-            const status=await getStatus(f.friend_phone,true);
-            html+=`<div class="elite-card" data-phone="${f.friend_phone}"><div class="avatar-diamond">👤</div><div class="info-diamond"><div class="name-diamond">${escapeHtml(name)}</div><div class="status-diamond">${status}</div></div><div>💬</div></div>`;
+            html+=`<div class="elite-card" data-phone="${f.friend_phone}"><div class="avatar-diamond">👤</div><div class="info-diamond"><div class="name-diamond">${escapeHtml(name)}</div><div class="status-diamond">💎 ЭЛИТА</div></div><div>💬</div></div>`;
         }
         document.getElementById('friendsList').innerHTML = html || '<div style="text-align:center; padding:40px;">➕ Добавьте друзей в "КОНТАКТЫ"</div>';
         document.querySelectorAll('.elite-card').forEach(c=>c.onclick=()=>openChat(c.dataset.phone));
@@ -575,7 +607,7 @@ HTML_PAGE = """<!DOCTYPE html>
         let html='';
         for(let u of filtered){
             const isFriend=currentFriends.some(f=>f.friend_phone===u.phone);
-            html+=`<div class="elite-card" style="justify-content:space-between;"><div style="display:flex; gap:14px;"><div class="avatar-diamond">👤</div><div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div></div>${!isFriend?`<button class="small-btn-gold" data-add="${u.phone}">➕ ДОБАВИТЬ</button>`:'<span style="color:#FFD700;">◆ friend</span>'}</div>`;
+            html+=`<div class="elite-card" style="justify-content:space-between;"><div style="display:flex; gap:14px;"><div class="avatar-diamond">👤</div><div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div></div>${!isFriend?`<button class="small-btn-gold" data-add="${u.phone}">➕ ДОБАВИТЬ</button>`:'<span style="color:#FFD700;">◆ ДРУГ</span>'}</div>`;
         }
         document.getElementById('searchResults').innerHTML = html || '<div style="text-align:center; padding:40px;">Не найдено</div>';
         document.querySelectorAll('[data-add]').forEach(btn=>btn.onclick=async e=>{
@@ -585,19 +617,17 @@ HTML_PAGE = """<!DOCTYPE html>
         });
     };
 
-    // ФИКС: обновление сообщений без дерганий и плавно
     let lastGlobalCount=0;
     async function loadGlobal(){
         const r=await fetch(`${API}/general_messages`); const d=await r.json();
         const container=document.getElementById('globalMessages');
         if(!container) return;
         const msgs=d.messages||[];
-        if(msgs.length===lastGlobalCount && container.children.length===msgs.length) return;
         const wasBottom=container.scrollHeight-container.scrollTop-container.clientHeight<50;
         let html='';
         for(let m of msgs){
             const isOut=m.from===currentUser.phone;
-            html+=`<div class="luxury-message ${isOut?'msg-out':'msg-in'}">${escapeHtml(m.text)}<div class="msg-footer"><span class="msg-time">${new Date(m.time).toLocaleTimeString()}</span><span class="delivered-icon">✓ доставлено</span></div></div>`;
+            html+=`<div class="luxury-message ${isOut?'msg-out':'msg-in'}">${escapeHtml(m.text)}<div class="msg-footer"><span class="delivered-icon">✓ доставлено</span></div></div>`;
         }
         container.innerHTML=html;
         if(wasBottom) container.scrollTop=container.scrollHeight;
@@ -624,12 +654,11 @@ HTML_PAGE = """<!DOCTYPE html>
         const container=document.getElementById('chatMessagesArea');
         if(!container) return;
         const msgs=d.messages||[];
-        if(msgs.length===lastPrivateCount && container.children.length===msgs.length) return;
         const wasBottom=container.scrollHeight-container.scrollTop-container.clientHeight<50;
         let html='';
         for(let m of msgs){
             const isOut=m.from===currentUser.phone;
-            html+=`<div class="luxury-message ${isOut?'msg-out':'msg-in'}">${escapeHtml(m.text)}<div class="msg-footer"><span class="msg-time">${new Date(m.time).toLocaleTimeString()}</span><span class="delivered-icon">✓ доставлено</span></div></div>`;
+            html+=`<div class="luxury-message ${isOut?'msg-out':'msg-in'}">${escapeHtml(m.text)}<div class="msg-footer"><span class="delivered-icon">✓ доставлено</span></div></div>`;
         }
         container.innerHTML=html;
         if(wasBottom) container.scrollTop=container.scrollHeight;
@@ -674,113 +703,14 @@ HTML_PAGE = """<!DOCTYPE html>
     }
 </script>
 </body>
-</html>
-"""
+</html>"""
 
 @app.get("/")
 @app.get("/web")
 async def serve_index():
     return HTMLResponse(content=HTML_PAGE)
 
-@app.post("/register")
-async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.phone == data.phone))
-    user = result.scalar_one_or_none()
-    if user:
-        return {"status": "ok", "username": user.username}
-    new_user = User(phone=data.phone, username=data.username)
-    db.add(new_user)
-    await db.commit()
-    return {"status": "ok", "username": data.username}
-
-@app.post("/update_status")
-async def update_status(req: PhoneRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(UserStatus).where(UserStatus.phone == req.phone))
-    status = result.scalar_one_or_none()
-    if status:
-        status.is_online = True
-        status.last_seen = datetime.utcnow()
-    else:
-        status = UserStatus(phone=req.phone, is_online=True, last_seen=datetime.utcnow())
-        db.add(status)
-    await db.commit()
-    return {"status": "ok"}
-
-@app.get("/get_status/{phone}")
-async def get_status(phone: str, viewer_phone: str = None, db: AsyncSession = Depends(get_db)):
-    is_friend = False
-    if viewer_phone:
-        result = await db.execute(select(Friend).where(Friend.user_phone == viewer_phone, Friend.friend_phone == phone))
-        is_friend = result.scalar_one_or_none() is not None
-    result = await db.execute(select(UserStatus).where(UserStatus.phone == phone))
-    status = result.scalar_one_or_none()
-    if not status:
-        return {"is_online": False, "last_seen_text": "неизвестно"}
-    if status.is_online:
-        return {"is_online": True, "last_seen_text": "онлайн"}
-    if is_friend:
-        diff = datetime.utcnow() - status.last_seen
-        if diff.days > 0: last_text = f"{diff.days} дн. назад"
-        elif diff.seconds > 3600: last_text = f"{diff.seconds // 3600} ч. назад"
-        elif diff.seconds > 60: last_text = f"{diff.seconds // 60} мин. назад"
-        else: last_text = "только что"
-        return {"is_online": False, "last_seen_text": last_text}
-    return {"is_online": False, "last_seen_text": "недавно"}
-
-@app.post("/add_friend")
-async def add_friend(data: FriendAction, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Friend).where(Friend.user_phone == data.user_phone, Friend.friend_phone == data.friend_phone))
-    if result.scalar_one_or_none():
-        return {"status": "error"}
-    db.add(Friend(user_phone=data.user_phone, friend_phone=data.friend_phone))
-    await db.commit()
-    return {"status": "ok"}
-
-@app.get("/friends/{phone}")
-async def get_friends(phone: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Friend).where(Friend.user_phone == phone))
-    return [{"friend_phone": f.friend_phone} for f in result.scalars().all()]
-
-@app.get("/search_users")
-async def search_users(q: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(or_(User.username.ilike(f"%{q}%"), User.phone.ilike(f"%{q}%"))).limit(20))
-    users = result.scalars().all()
-    return [{"phone": u.phone, "username": u.username} for u in users]
-
-@app.post("/send")
-async def send_message(msg: MessageSend, db: AsyncSession = Depends(get_db)):
-    new_msg = Message(from_phone=msg.from_phone, to_phone=msg.to_phone, text=msg.text, message_type=msg.message_type, timestamp=datetime.utcnow())
-    db.add(new_msg)
-    await db.commit()
-    return {"status": "ok"}
-
-@app.get("/dialog/{phone1}/{phone2}")
-async def get_dialog(phone1: str, phone2: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Message).where(((Message.from_phone == phone1) & (Message.to_phone == phone2)) | ((Message.from_phone == phone2) & (Message.to_phone == phone1))).order_by(Message.timestamp))
-    messages = result.scalars().all()
-    return {"messages": [{"id": m.id, "from": m.from_phone, "text": m.text, "time": m.timestamp.isoformat(), "message_type": m.message_type} for m in messages]}
-
-@app.post("/send_general")
-async def send_general_message(msg: GeneralMessageSend, db: AsyncSession = Depends(get_db)):
-    new_msg = GeneralMessage(from_phone=msg.from_phone, text=msg.text, message_type=msg.message_type, timestamp=datetime.utcnow())
-    db.add(new_msg)
-    await db.commit()
-    return {"status": "ok"}
-
-@app.get("/general_messages")
-async def get_general_messages(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(GeneralMessage).order_by(GeneralMessage.timestamp))
-    messages = result.scalars().all()
-    users_result = await db.execute(select(User))
-    users = {u.phone: u.username for u in users_result.scalars().all()}
-    return {"messages": [{"id": m.id, "from": m.from_phone, "from_name": users.get(m.from_phone, m.from_phone), "text": m.text, "time": m.timestamp.isoformat(), "message_type": m.message_type} for m in messages]}
-
-@app.get("/users")
-async def get_users(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User))
-    users = result.scalars().all()
-    return [{"phone": u.phone, "username": u.username} for u in users]
-
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=port)

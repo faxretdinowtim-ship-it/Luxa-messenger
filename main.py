@@ -89,13 +89,13 @@ HTML_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>LUXA | GOLD PREMIUM</title>
+    <title>LUXA | DIAMOND PREMIUM</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
         body {
             font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
-            background: #03030a;
+            background: #020208;
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -104,7 +104,7 @@ HTML_PAGE = """<!DOCTYPE html>
             position: relative;
         }
         
-        /* 3D КИНЕМАТОГРАФИЧНЫЙ ФОН */
+        /* ГИПЕР-РЕАЛИСТИЧНЫЙ 3D ФОН С АЛМАЗНЫМ СИЯНИЕМ */
         body::before {
             content: '';
             position: fixed;
@@ -113,16 +113,18 @@ HTML_PAGE = """<!DOCTYPE html>
             width: 200%;
             height: 200%;
             background: 
-                radial-gradient(ellipse at 20% 25%, rgba(139, 92, 246, 0.25), transparent 70%),
-                radial-gradient(ellipse at 85% 70%, rgba(99, 102, 241, 0.2), transparent 60%),
+                radial-gradient(ellipse at 20% 25%, rgba(139, 92, 246, 0.3), transparent 70%),
+                radial-gradient(ellipse at 85% 70%, rgba(99, 102, 241, 0.25), transparent 60%),
+                radial-gradient(ellipse at 50% 50%, rgba(255,215,0,0.08), transparent 80%),
                 repeating-linear-gradient(45deg, rgba(255,215,0,0.03) 0px, rgba(255,215,0,0.03) 2px, transparent 2px, transparent 12px);
-            z-index: -2;
-            animation: slowDrift 25s ease infinite;
+            z-index: -3;
+            animation: cosmicDrift 30s ease infinite;
         }
         
-        @keyframes slowDrift {
-            0%, 100% { transform: translate(0,0) scale(1); }
-            50% { transform: translate(1%, -0.5%) scale(1.02); }
+        @keyframes cosmicDrift {
+            0%, 100% { transform: translate(0,0) scale(1) rotate(0deg); }
+            33% { transform: translate(0.8%, -0.5%) scale(1.01) rotate(0.5deg); }
+            66% { transform: translate(-0.3%, 0.4%) scale(0.99) rotate(-0.3deg); }
         }
         
         body::after {
@@ -132,54 +134,57 @@ HTML_PAGE = """<!DOCTYPE html>
             left: 0;
             right: 0;
             bottom: 0;
-            background: radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.5) 100%);
-            z-index: -1;
+            background: radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 100%);
+            z-index: -2;
             pointer-events: none;
         }
         
-        /* ПРЕМИУМ СТЕКЛЯННЫЙ КОНТЕЙНЕР */
+        /* ПРЕМИУМ СТЕКЛЯННЫЙ КОНТЕЙНЕР С ЗОЛОТОЙ ОБВОДКОЙ */
         .app {
             width: 100%;
             max-width: 480px;
             height: 95vh;
             max-height: 820px;
-            background: rgba(12, 12, 25, 0.65);
-            backdrop-filter: blur(35px) saturate(180%);
-            border-radius: 56px;
+            background: rgba(10, 10, 22, 0.55);
+            backdrop-filter: blur(40px) saturate(200%);
+            border-radius: 60px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 40px 70px -30px rgba(0,0,0,0.6), 0 0 0 1.5px rgba(255,215,0,0.15), inset 0 1px 0 rgba(255,255,255,0.05);
-            animation: fadeUp 0.5s cubic-bezier(0.2,0.9,0.4,1.1);
+            box-shadow: 
+                0 45px 75px -35px rgba(0,0,0,0.7),
+                0 0 0 1.5px rgba(255,215,0,0.2),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+            animation: glassAscend 0.6s cubic-bezier(0.16,1,0.3,1);
         }
         
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(30px) scale(0.96); backdrop-filter: blur(0px); }
-            to { opacity: 1; transform: translateY(0) scale(1); backdrop-filter: blur(35px) saturate(180%); }
+        @keyframes glassAscend {
+            from { opacity: 0; transform: translateY(40px) scale(0.94); backdrop-filter: blur(0px); }
+            to { opacity: 1; transform: translateY(0) scale(1); backdrop-filter: blur(40px) saturate(200%); }
         }
         
-        /* СТРАНИЦЫ */
+        /* СТРАНИЦЫ С ПЛАВНЫМ ПОЯВЛЕНИЕМ */
         .page {
             flex: 1;
             overflow-y: auto;
             padding: 24px 20px;
             display: none;
-            animation: pageEnter 0.35s ease;
+            animation: fadeSlide 0.4s cubic-bezier(0.2,0.9,0.4,1.1);
         }
         .page.active { display: block; }
-        @keyframes pageEnter {
-            from { opacity: 0; transform: translateX(20px); }
+        @keyframes fadeSlide {
+            from { opacity: 0; transform: translateX(15px); }
             to { opacity: 1; transform: translateX(0); }
         }
         
-        /* ЗОЛОТОЕ НИЖНЕЕ МЕНЮ */
-        .gold-menu {
-            background: rgba(10, 10, 20, 0.85);
+        /* БРИЛЛИАНТОВОЕ МЕНЮ */
+        .diamond-menu {
+            background: rgba(8, 8, 18, 0.9);
             backdrop-filter: blur(30px);
             display: flex;
             justify-content: space-around;
-            padding: 12px 16px 22px;
-            border-top: 0.5px solid rgba(255,215,0,0.2);
+            padding: 12px 16px 24px;
+            border-top: 0.5px solid rgba(255,215,0,0.25);
         }
         .menu-item {
             display: flex;
@@ -187,58 +192,62 @@ HTML_PAGE = """<!DOCTYPE html>
             align-items: center;
             gap: 5px;
             cursor: pointer;
-            padding: 8px 16px;
-            border-radius: 40px;
-            transition: all 0.25s cubic-bezier(0.2,0.9,0.4,1.1);
+            padding: 8px 20px;
+            border-radius: 50px;
+            transition: all 0.3s cubic-bezier(0.2,0.9,0.4,1.2);
         }
         .menu-item.active {
-            background: rgba(255,215,0,0.15);
-            transform: translateY(-2px);
+            background: rgba(255,215,0,0.12);
+            transform: translateY(-3px);
+            box-shadow: 0 0 15px rgba(255,215,0,0.2);
         }
-        .menu-icon { font-size: 26px; }
+        .menu-icon { font-size: 26px; filter: drop-shadow(0 0 5px rgba(255,215,0,0.3)); }
         .menu-label {
             font-size: 11px;
             font-weight: 600;
+            letter-spacing: 1px;
             color: rgba(255,255,255,0.5);
         }
         .menu-item.active .menu-label {
             color: #FFD700;
-            text-shadow: 0 0 8px rgba(255,215,0,0.5);
+            text-shadow: 0 0 6px rgba(255,215,0,0.6);
         }
         
-        /* ПРЕМИУМ ХЕДЕР */
-        .premium-header {
-            padding: 18px 20px;
+        /* ЗОЛОТОЙ ХЕДЕР */
+        .gold-header {
+            padding: 18px 22px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 0.5px solid rgba(255,215,0,0.15);
-            background: rgba(0,0,0,0.2);
+            border-bottom: 0.5px solid rgba(255,215,0,0.2);
+            background: rgba(0,0,0,0.15);
         }
-        .logo-gold {
+        .logo-diamond {
             font-size: 22px;
             font-weight: 800;
-            background: linear-gradient(135deg, #FFD700, #FFA500, #FFD700);
+            background: linear-gradient(145deg, #FFD700, #FFA500, #FFD700);
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
             letter-spacing: -0.5px;
+            text-shadow: 0 0 8px rgba(255,215,0,0.3);
         }
-        .profile-gold {
+        .profile-diamond {
             background: rgba(255,215,0,0.1);
-            padding: 6px 14px;
+            padding: 6px 16px;
             border-radius: 40px;
             font-size: 13px;
             font-weight: 600;
             color: #FFD700;
             border: 0.5px solid rgba(255,215,0,0.3);
+            backdrop-filter: blur(4px);
         }
         
-        /* ЯРКИЕ КАРТОЧКИ ДРУЗЕЙ И ЧАТОВ */
-        .friend-card, .user-card {
-            background: rgba(255,255,255,0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 28px;
+        /* ЭЛИТНЫЕ КАРТОЧКИ */
+        .elite-card {
+            background: rgba(255,255,255,0.04);
+            backdrop-filter: blur(12px);
+            border-radius: 32px;
             padding: 14px 18px;
             margin-bottom: 12px;
             display: flex;
@@ -247,80 +256,84 @@ HTML_PAGE = """<!DOCTYPE html>
             cursor: pointer;
             border: 0.5px solid rgba(255,215,0,0.2);
             transition: all 0.25s ease;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            box-shadow: 0 6px 16px -8px rgba(0,0,0,0.3);
         }
-        .friend-card:hover { transform: translateX(5px); border-color: rgba(255,215,0,0.5); }
-        .friend-card:active { transform: scale(0.98); }
+        .elite-card:hover { transform: translateX(5px); border-color: rgba(255,215,0,0.5); background: rgba(255,255,255,0.06); }
+        .elite-card:active { transform: scale(0.98); }
         
-        .avatar-gold {
-            width: 54px; height: 54px;
-            background: linear-gradient(145deg, #7C3AED, #4F46E5);
-            border-radius: 28px;
+        .avatar-diamond {
+            width: 56px; height: 56px;
+            background: linear-gradient(145deg, #8B5CF6, #4F46E5);
+            border-radius: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 26px;
-            box-shadow: 0 8px 16px -6px rgba(0,0,0,0.4);
+            font-size: 28px;
+            box-shadow: 0 8px 18px -8px rgba(0,0,0,0.4);
         }
-        .info-gold { flex: 1; }
-        .name-gold { font-weight: 700; font-size: 17px; color: #FFE4B5; letter-spacing: -0.2px; }
-        .sub-gold { font-size: 12px; opacity: 0.7; margin-top: 4px; color: rgba(255,255,255,0.7); }
+        .info-diamond { flex: 1; }
+        .name-diamond { font-weight: 700; font-size: 17px; color: #FFF5E0; letter-spacing: -0.2px; }
+        .status-diamond { font-size: 12px; opacity: 0.7; margin-top: 4px; color: rgba(255,255,255,0.7); }
         
-        /* 3D СООБЩЕНИЯ С ЭФФЕКТОМ СВЕЧЕНИЯ */
-        .message-bubble {
+        /* СООБЩЕНИЯ ЛЮКСОВОГО КЛАССА */
+        .luxury-message {
             max-width: 80%;
-            padding: 12px 18px;
-            border-radius: 28px;
+            padding: 12px 20px;
+            border-radius: 32px;
             font-size: 15px;
-            margin-bottom: 8px;
-            animation: messageGlow 0.3s ease-out;
+            margin-bottom: 10px;
+            animation: messageReveal 0.35s cubic-bezier(0.2,0.9,0.4,1.2);
             position: relative;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            box-shadow: 0 6px 20px -10px rgba(0,0,0,0.3);
         }
-        @keyframes messageGlow {
-            from { opacity: 0; transform: translateY(12px) scale(0.96); filter: blur(2px); }
+        @keyframes messageReveal {
+            from { opacity: 0; transform: translateY(14px) scale(0.96); filter: blur(2px); }
             to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
         }
-        .my-msg {
+        .msg-out {
             background: linear-gradient(135deg, #8B5CF6, #6366F1);
             align-self: flex-end;
-            border-bottom-right-radius: 6px;
+            border-bottom-right-radius: 10px;
             color: white;
-            box-shadow: 0 0 12px rgba(139,92,246,0.4);
+            box-shadow: 0 0 18px rgba(139,92,246,0.4);
         }
-        .their-msg {
-            background: rgba(30,30,45,0.8);
+        .msg-in {
+            background: rgba(35, 35, 55, 0.85);
             backdrop-filter: blur(12px);
             align-self: flex-start;
-            border-bottom-left-radius: 6px;
-            color: #f0f0ff;
-            border: 0.5px solid rgba(255,215,0,0.2);
+            border-bottom-left-radius: 10px;
+            color: #F0F0FF;
+            border: 0.5px solid rgba(255,215,0,0.25);
         }
-        .msg-status {
+        .msg-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 6px;
             font-size: 9px;
             opacity: 0.6;
-            margin-top: 5px;
-            text-align: right;
-            display: flex;
-            gap: 6px;
-            justify-content: flex-end;
         }
-        .msg-time { font-size: 9px; opacity: 0.5; }
-        .delivered { color: #4ade80; }
-        .read { color: #FFD700; }
+        .msg-time { font-family: monospace; }
+        .delivered-icon { color: #4ade80; }
+        .read-icon { color: #FFD700; }
         
-        /* ПРЕМИУМ ПОЛЕ ВВОДА */
-        .input-luxury {
+        /* ПРЕМИУМ ПОЛЯ ВВОДА */
+        .input-premium {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             background: rgba(255,255,255,0.05);
             border-radius: 60px;
-            padding: 6px 6px 6px 22px;
+            padding: 6px 6px 6px 24px;
             margin: 12px;
-            border: 0.5px solid rgba(255,215,0,0.2);
-            backdrop-filter: blur(10px);
+            border: 0.5px solid rgba(255,215,0,0.25);
+            backdrop-filter: blur(15px);
+            transition: all 0.2s;
         }
-        .input-luxury input {
+        .input-premium:focus-within {
+            border-color: #FFD700;
+            box-shadow: 0 0 20px rgba(255,215,0,0.15);
+        }
+        .input-premium input {
             flex: 1;
             background: transparent;
             border: none;
@@ -329,71 +342,94 @@ HTML_PAGE = """<!DOCTYPE html>
             font-size: 15px;
             outline: none;
         }
-        .input-luxury button {
-            width: 50px;
-            height: 50px;
+        .input-premium button {
+            width: 52px;
+            height: 52px;
             background: linear-gradient(135deg, #8B5CF6, #6366F1);
-            border-radius: 50px;
+            border-radius: 52px;
             padding: 0;
             font-size: 22px;
             margin: 0;
-            box-shadow: 0 0 10px rgba(99,102,241,0.4);
+            box-shadow: 0 0 12px rgba(99,102,241,0.5);
+            transition: all 0.2s;
         }
+        .input-premium button:active { transform: scale(0.94); }
         
-        /* ДРУГИЕ ЭЛЕМЕНТЫ */
+        /* ОБЩИЕ ЭЛЕМЕНТЫ */
         input, button { width: 100%; }
         input {
-            padding: 16px 18px;
+            padding: 16px 20px;
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,215,0,0.2);
-            border-radius: 48px;
+            border-radius: 50px;
             color: white;
             font-size: 15px;
             outline: none;
+            transition: all 0.2s;
+        }
+        input:focus {
+            border-color: #FFD700;
+            box-shadow: 0 0 12px rgba(255,215,0,0.2);
         }
         button {
             background: linear-gradient(135deg, #8B5CF6, #6366F1);
             border: none;
-            border-radius: 48px;
+            border-radius: 56px;
             padding: 16px;
             color: white;
             font-weight: 700;
             font-size: 16px;
             cursor: pointer;
             margin-top: 12px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(99,102,241,0.3);
         }
-        .search-row { display: flex; gap: 10px; margin-bottom: 20px; }
-        .small-btn {
-            background: rgba(255,215,0,0.15);
-            padding: 6px 14px;
-            border-radius: 30px;
+        button:active { transform: scale(0.97); }
+        
+        .search-row { display: flex; gap: 12px; margin-bottom: 20px; }
+        .small-btn-gold {
+            background: rgba(255,215,0,0.12);
+            padding: 8px 16px;
+            border-radius: 40px;
             font-size: 12px;
+            font-weight: 600;
             cursor: pointer;
             color: #FFD700;
+            border: 0.5px solid rgba(255,215,0,0.3);
         }
         .back-gold {
             background: rgba(255,215,0,0.1);
-            padding: 8px 18px;
-            border-radius: 40px;
+            padding: 8px 20px;
+            border-radius: 50px;
             font-size: 14px;
+            font-weight: 600;
             color: #FFD700;
+            cursor: pointer;
+            transition: 0.2s;
         }
+        .back-gold:active { transform: scale(0.96); }
+        
         .success, .error {
             padding: 12px;
-            border-radius: 40px;
+            border-radius: 60px;
             text-align: center;
             margin-top: 12px;
             display: none;
+            font-weight: 500;
         }
-        .success { background: #10b981; }
+        .success { background: #10b981; box-shadow: 0 0 15px #10b98140; }
         .error { background: #ef4444; }
-        .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-        .scroll-area { height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .messages-scroll { height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
         .hidden { display: none; }
         
         ::-webkit-scrollbar { width: 3px; }
-        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
-        ::-webkit-scrollbar-thumb { background: #FFD700; border-radius: 10px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #FFD700; border-radius: 10px; box-shadow: 0 0 5px #FFD700; }
+        
+        /* СТИЛИ ДЛЯ ЧАТА (фикс смещения) */
+        #chatMessagesArea { height: 60vh; }
+        .page > div:first-child { margin-bottom: 0; }
     </style>
 </head>
 <body>
@@ -401,9 +437,9 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- ЛОГИН -->
     <div id="loginPage" class="page active" style="display: flex; flex-direction: column; justify-content: center;">
         <div style="text-align: center; margin-bottom: 40px;">
-            <div style="font-size: 70px; margin-bottom: 12px; text-shadow: 0 0 20px #FFD700;">💎</div>
-            <div style="font-size: 34px; font-weight: 800; background: linear-gradient(135deg, #FFD700, #FFA500); -webkit-background-clip: text; background-clip: text; color: transparent;">LUXA</div>
-            <div style="font-size: 11px; letter-spacing: 2px; color: rgba(255,215,0,0.6);">GOLD PREMIUM</div>
+            <div style="font-size: 80px; margin-bottom: 12px; text-shadow: 0 0 30px #FFD700;">💎</div>
+            <div style="font-size: 36px; font-weight: 800; background: linear-gradient(145deg, #FFD700, #FFA500); -webkit-background-clip: text; background-clip: text; color: transparent;">LUXA</div>
+            <div style="font-size: 11px; letter-spacing: 3px; color: rgba(255,215,0,0.6); margin-top: 6px;">DIAMOND PREMIUM</div>
         </div>
         <input type="tel" id="loginPhone" placeholder="ТЕЛЕФОН" style="margin-bottom: 12px;">
         <input type="text" id="loginName" placeholder="ИМЯ" style="margin-bottom: 20px;">
@@ -414,39 +450,38 @@ HTML_PAGE = """<!DOCTYPE html>
         <div id="errorMsg" class="error"></div>
     </div>
 
-    <!-- ОСНОВНОЙ ИНТЕРФЕЙС -->
     <div id="mainApp" style="display: none; flex-direction: column; flex: 1;">
-        <div class="premium-header">
-            <div class="logo-gold">LUXA GOLD</div>
-            <div class="profile-gold" id="userNameDisplay"></div>
+        <div class="gold-header">
+            <div class="logo-diamond">LUXA DIAMOND</div>
+            <div class="profile-diamond" id="userNameDisplay"></div>
         </div>
 
         <div id="chatsPage" class="page active">
-            <div class="flex-between"><div style="font-weight: 700; color: #FFD700;">💎 VIP ЧАТЫ</div></div>
+            <div class="flex-between"><div style="font-weight: 700; color: #FFD700; font-size: 18px;">💎 VIP ЧАТЫ</div></div>
             <div id="friendsList"></div>
         </div>
 
         <div id="contactsPage" class="page">
-            <div class="search-row"><input type="text" id="searchInput" placeholder="🔍 ПОИСК ПО ID"><button id="searchBtn" style="width: auto; padding: 0 20px;">ИСКАТЬ</button></div>
+            <div class="search-row"><input type="text" id="searchInput" placeholder="🔍 ПОИСК ПО ID / ИМЕНИ"><button id="searchBtn" style="width: auto; padding: 0 24px;">ИСКАТЬ</button></div>
             <div id="searchResults"></div>
         </div>
 
         <div id="globalPage" class="page">
-            <div style="font-weight: 700; color: #FFD700; margin-bottom: 16px;">🌍 ОБЩИЙ ЧАТ</div>
-            <div id="globalMessages" class="scroll-area"></div>
-            <div class="input-luxury"><input type="text" id="globalMsgInput" placeholder="Сообщение..."><button id="globalSendBtn">➤</button></div>
+            <div style="font-weight: 700; color: #FFD700; font-size: 18px; margin-bottom: 16px;">🌍 ОБЩИЙ ЧАТ</div>
+            <div id="globalMessages" class="messages-scroll"></div>
+            <div class="input-premium"><input type="text" id="globalMsgInput" placeholder="Сообщение в общий чат..."><button id="globalSendBtn">➤</button></div>
         </div>
 
         <div id="chatPage" class="page">
             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-                <button class="back-gold" id="closeChatBtn">← НАЗАД</button>
+                <div class="back-gold" id="closeChatBtn">← НАЗАД</div>
                 <div style="flex:1; text-align: center; font-weight: 700; font-size: 18px; color: #FFD700;" id="chatPartnerName"></div>
             </div>
-            <div id="chatMessagesArea" class="scroll-area" style="height: 60vh;"></div>
-            <div class="input-luxury"><input type="text" id="chatMsgInput" placeholder="Сообщение..."><button id="sendChatMsgBtn">➤</button></div>
+            <div id="chatMessagesArea" class="messages-scroll" style="height: 60vh;"></div>
+            <div class="input-premium"><input type="text" id="chatMsgInput" placeholder="Сообщение..."><button id="sendChatMsgBtn">➤</button></div>
         </div>
 
-        <div class="gold-menu">
+        <div class="diamond-menu">
             <div class="menu-item active" data-page="chats"><div class="menu-icon">💬</div><div class="menu-label">ЧАТЫ</div></div>
             <div class="menu-item" data-page="contacts"><div class="menu-icon">👥</div><div class="menu-label">КОНТАКТЫ</div></div>
             <div class="menu-item" data-page="global"><div class="menu-icon">🌍</div><div class="menu-label">ОБЩИЙ</div></div>
@@ -501,7 +536,7 @@ HTML_PAGE = """<!DOCTYPE html>
         if(!currentUser) return;
         await fetch(`${API}/update_status`,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ phone:currentUser.phone }) });
     }
-    setInterval(updateOnline,20000);
+    setInterval(updateOnline,25000);
     
     async function getStatus(phone, isFriend){
         try{
@@ -525,10 +560,10 @@ HTML_PAGE = """<!DOCTYPE html>
             const user=allUsers.find(u=>u.phone===f.friend_phone);
             const name=user?user.username:f.friend_phone;
             const status=await getStatus(f.friend_phone,true);
-            html+=`<div class="friend-card" data-phone="${f.friend_phone}"><div class="avatar-gold">👤</div><div class="info-gold"><div class="name-gold">${escapeHtml(name)}</div><div class="sub-gold">${status}</div></div><div>💬</div></div>`;
+            html+=`<div class="elite-card" data-phone="${f.friend_phone}"><div class="avatar-diamond">👤</div><div class="info-diamond"><div class="name-diamond">${escapeHtml(name)}</div><div class="status-diamond">${status}</div></div><div>💬</div></div>`;
         }
         document.getElementById('friendsList').innerHTML = html || '<div style="text-align:center; padding:40px;">➕ Добавьте друзей в "КОНТАКТЫ"</div>';
-        document.querySelectorAll('.friend-card').forEach(c=>c.onclick=()=>openChat(c.dataset.phone));
+        document.querySelectorAll('.elite-card').forEach(c=>c.onclick=()=>openChat(c.dataset.phone));
     }
 
     document.getElementById('searchBtn').onclick = async ()=>{
@@ -540,7 +575,7 @@ HTML_PAGE = """<!DOCTYPE html>
         let html='';
         for(let u of filtered){
             const isFriend=currentFriends.some(f=>f.friend_phone===u.phone);
-            html+=`<div class="user-card" style="justify-content:space-between;"><div style="display:flex; gap:14px;"><div class="avatar-gold">👤</div><div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div></div>${!isFriend?`<button class="small-btn" data-add="${u.phone}">➕ ДОБАВИТЬ</button>`:'<span style="color:#FFD700;">✓ friend</span>'}</div>`;
+            html+=`<div class="elite-card" style="justify-content:space-between;"><div style="display:flex; gap:14px;"><div class="avatar-diamond">👤</div><div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div></div>${!isFriend?`<button class="small-btn-gold" data-add="${u.phone}">➕ ДОБАВИТЬ</button>`:'<span style="color:#FFD700;">◆ friend</span>'}</div>`;
         }
         document.getElementById('searchResults').innerHTML = html || '<div style="text-align:center; padding:40px;">Не найдено</div>';
         document.querySelectorAll('[data-add]').forEach(btn=>btn.onclick=async e=>{
@@ -550,15 +585,23 @@ HTML_PAGE = """<!DOCTYPE html>
         });
     };
 
+    // ФИКС: обновление сообщений без дерганий и плавно
+    let lastGlobalCount=0;
     async function loadGlobal(){
         const r=await fetch(`${API}/general_messages`); const d=await r.json();
+        const container=document.getElementById('globalMessages');
+        if(!container) return;
+        const msgs=d.messages||[];
+        if(msgs.length===lastGlobalCount && container.children.length===msgs.length) return;
+        const wasBottom=container.scrollHeight-container.scrollTop-container.clientHeight<50;
         let html='';
-        for(let m of d.messages||[]){
+        for(let m of msgs){
             const isOut=m.from===currentUser.phone;
-            html+=`<div class="message-bubble ${isOut?'my-msg':'their-msg'}">${escapeHtml(m.text)}<div class="msg-status"><span class="msg-time">${new Date(m.time).toLocaleTimeString()}</span><span class="delivered">✓ доставлено</span></div></div>`;
+            html+=`<div class="luxury-message ${isOut?'msg-out':'msg-in'}">${escapeHtml(m.text)}<div class="msg-footer"><span class="msg-time">${new Date(m.time).toLocaleTimeString()}</span><span class="delivered-icon">✓ доставлено</span></div></div>`;
         }
-        document.getElementById('globalMessages').innerHTML=html;
-        document.getElementById('globalMessages').scrollTop=document.getElementById('globalMessages').scrollHeight;
+        container.innerHTML=html;
+        if(wasBottom) container.scrollTop=container.scrollHeight;
+        lastGlobalCount=msgs.length;
     }
     async function sendGlobal(t){ await fetch(`${API}/send_general`,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ from_phone:currentUser.phone, text:t, message_type:'text' }) }); loadGlobal(); }
     document.getElementById('globalSendBtn').onclick=()=>{ let inp=document.getElementById('globalMsgInput'); if(inp.value.trim()) sendGlobal(inp.value.trim()); inp.value=''; };
@@ -571,20 +614,26 @@ HTML_PAGE = """<!DOCTYPE html>
         switchPage('chat');
         await loadPrivate();
         if(pollingChat) clearInterval(pollingChat);
-        pollingChat=setInterval(loadPrivate,3500);
+        pollingChat=setInterval(loadPrivate,4000);
     }
 
+    let lastPrivateCount=0;
     async function loadPrivate(){
         if(!activeChat) return;
         const r=await fetch(`${API}/dialog/${currentUser.phone}/${activeChat}`); const d=await r.json();
-        const wasBottom=document.getElementById('chatMessagesArea').scrollHeight-document.getElementById('chatMessagesArea').scrollTop-document.getElementById('chatMessagesArea').clientHeight<50;
+        const container=document.getElementById('chatMessagesArea');
+        if(!container) return;
+        const msgs=d.messages||[];
+        if(msgs.length===lastPrivateCount && container.children.length===msgs.length) return;
+        const wasBottom=container.scrollHeight-container.scrollTop-container.clientHeight<50;
         let html='';
-        for(let m of d.messages||[]){
+        for(let m of msgs){
             const isOut=m.from===currentUser.phone;
-            html+=`<div class="message-bubble ${isOut?'my-msg':'their-msg'}">${escapeHtml(m.text)}<div class="msg-status"><span class="msg-time">${new Date(m.time).toLocaleTimeString()}</span><span class="delivered">✓ доставлено</span></div></div>`;
+            html+=`<div class="luxury-message ${isOut?'msg-out':'msg-in'}">${escapeHtml(m.text)}<div class="msg-footer"><span class="msg-time">${new Date(m.time).toLocaleTimeString()}</span><span class="delivered-icon">✓ доставлено</span></div></div>`;
         }
-        document.getElementById('chatMessagesArea').innerHTML=html;
-        if(wasBottom) document.getElementById('chatMessagesArea').scrollTop=document.getElementById('chatMessagesArea').scrollHeight;
+        container.innerHTML=html;
+        if(wasBottom) container.scrollTop=container.scrollHeight;
+        lastPrivateCount=msgs.length;
     }
 
     async function sendPrivate(t){
@@ -614,7 +663,7 @@ HTML_PAGE = """<!DOCTYPE html>
         switchPage('chats');
         updateOnline();
         if(glbInt) clearInterval(glbInt);
-        glbInt=setInterval(loadGlobal,4500);
+        glbInt=setInterval(loadGlobal,5000);
     }
 
     function escapeHtml(s){ if(!s) return ''; return s.replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }

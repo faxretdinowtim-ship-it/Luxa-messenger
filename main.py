@@ -1,12 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, select, or_, delete
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, select, or_
 import uvicorn
 
 app = FastAPI()
@@ -76,7 +76,6 @@ class UserRegister(BaseModel): phone: str; username: str
 class MessageSend(BaseModel): from_phone: str; to_phone: str; text: str; message_type: str = "text"
 class GeneralMessageSend(BaseModel): from_phone: str; text: str; message_type: str = "text"
 class FriendAction(BaseModel): user_phone: str; friend_phone: str
-class DeleteChat(BaseModel): user_phone: str; other_phone: str
 
 async def get_db():
     async with AsyncSessionLocal() as session:
@@ -88,14 +87,14 @@ async def startup():
         await conn.run_sync(Base.metadata.create_all)
     print("✅ Сервер и БД готовы!")
 
-# ========== HTML СТРАНИЦА (фронтенд) ==========
+# ========== HTML СТРАНИЦА (клиповый мессенджер) ==========
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>LUXA — мессенджер</title>
+    <title>LUXA — клиповый мессенджер</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
@@ -105,48 +104,95 @@ HTML_PAGE = """
             display: flex;
             justify-content: center;
             align-items: center;
+            overflow: hidden;
         }
         .app {
             width: 100%;
             max-width: 480px;
-            height: 95vh;
-            background: rgba(12, 12, 20, 0.9);
+            height: 100vh;
+            background: rgba(12, 12, 20, 0.95);
             backdrop-filter: blur(32px);
-            border-radius: 48px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
         }
-        .screen {
+        /* Контентные страницы */
+        .page {
             flex: 1;
+            overflow-y: auto;
+            padding: 20px 16px;
+            display: none;
+            animation: pageSlide 0.3s ease;
+        }
+        .page.active {
+            display: block;
+        }
+        @keyframes pageSlide {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        /* Нижнее меню */
+        .bottom-menu {
+            background: rgba(20, 20, 30, 0.95);
+            backdrop-filter: blur(20px);
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 16px 20px;
+            border-top: 0.5px solid rgba(255,255,255,0.08);
+        }
+        .menu-item {
             display: flex;
             flex-direction: column;
-            padding: 24px 20px;
-            overflow-y: auto;
-        }
-        .hidden { display: none !important; }
-        .logo-block { text-align: center; margin-bottom: 32px; }
-        .logo-icon {
-            width: 64px; height: 64px;
-            background: linear-gradient(145deg, #fff, #ddd);
-            border-radius: 28px;
-            display: flex;
             align-items: center;
-            justify-content: center;
-            margin: 0 auto 12px;
-            font-size: 32px;
+            gap: 4px;
+            cursor: pointer;
+            transition: 0.2s;
+            padding: 8px 12px;
+            border-radius: 30px;
         }
-        .logo-text { font-size: 28px; font-weight: 700; color: white; }
-        .logo-sub { font-size: 11px; color: rgba(255,255,255,0.45); }
-        .input-group { margin-bottom: 16px; }
-        .input-label { font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 6px; padding-left: 12px; }
+        .menu-item.active {
+            background: rgba(124, 58, 237, 0.2);
+        }
+        .menu-icon {
+            font-size: 24px;
+        }
+        .menu-label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+        }
+        .menu-item.active .menu-label {
+            color: #7C3AED;
+        }
+        /* Шапка */
+        .header {
+            padding: 16px 20px;
+            border-bottom: 0.5px solid rgba(255,255,255,0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff, #a78bfa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .profile-badge {
+            background: rgba(255,255,255,0.1);
+            padding: 6px 12px;
+            border-radius: 30px;
+            font-size: 12px;
+        }
+        /* Общие стили */
         input {
             width: 100%;
-            padding: 14px 18px;
+            padding: 14px 16px;
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 40px;
+            border-radius: 30px;
             color: white;
             font-size: 15px;
             outline: none;
@@ -154,32 +200,15 @@ HTML_PAGE = """
         button {
             background: #7C3AED;
             border: none;
-            border-radius: 44px;
-            padding: 14px;
+            border-radius: 40px;
+            padding: 12px 20px;
             color: white;
             font-weight: 600;
-            font-size: 16px;
             cursor: pointer;
-            margin-top: 12px;
-            width: 100%;
         }
-        .btn-outline {
-            background: transparent;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        .success, .error {
-            margin-top: 12px;
-            padding: 10px;
-            border-radius: 30px;
-            text-align: center;
-            font-size: 13px;
-            display: none;
-        }
-        .success { background: #10b981; }
-        .error { background: #ef4444; }
-        .friend-card, .chat-card {
+        .friend-card, .user-card {
             background: rgba(255,255,255,0.04);
-            border-radius: 28px;
+            border-radius: 24px;
             padding: 12px 16px;
             margin-bottom: 10px;
             display: flex;
@@ -195,171 +224,190 @@ HTML_PAGE = """
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 22px;
         }
         .info { flex: 1; }
         .name { font-weight: 600; font-size: 15px; color: white; }
-        .status { font-size: 11px; opacity: 0.6; margin-top: 3px; }
-        .message {
+        .sub { font-size: 11px; opacity: 0.5; margin-top: 3px; }
+        .message-bubble {
             max-width: 80%;
             padding: 10px 14px;
             border-radius: 24px;
             font-size: 14px;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
-        .my-message {
+        .my-msg {
             background: #7C3AED;
             align-self: flex-end;
             border-bottom-right-radius: 6px;
         }
-        .their-message {
+        .their-msg {
             background: rgba(255,255,255,0.08);
             align-self: flex-start;
             border-bottom-left-radius: 6px;
         }
-        .msg-time { font-size: 9px; opacity: 0.5; margin-top: 4px; text-align: right; }
-        .search-row { display: flex; gap: 8px; margin-bottom: 16px; }
-        .search-row input { flex: 1; margin: 0; }
-        .search-row button { width: auto; padding: 0 16px; margin: 0; }
-        .small-btn {
-            background: rgba(255,255,255,0.08);
-            padding: 8px 16px;
-            border-radius: 30px;
-            font-size: 13px;
-            cursor: pointer;
-            display: inline-block;
-        }
-        .back-btn {
-            width: 40px; height: 40px;
-            background: rgba(255,255,255,0.06);
-            border-radius: 30px;
-            font-size: 22px;
-            cursor: pointer;
-        }
-        .messages-area {
+        .chat-area {
             flex: 1;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 6px;
-            padding: 8px 4px;
+            padding: 12px;
         }
-        .input-line {
+        .input-row {
             display: flex;
             gap: 8px;
             background: rgba(255,255,255,0.04);
             border-radius: 50px;
             padding: 6px 6px 6px 18px;
-            margin-top: 12px;
+            margin: 12px;
         }
-        .input-line input {
+        .input-row input {
             flex: 1;
             background: transparent;
             border: none;
             padding: 10px 0;
-            margin: 0;
         }
-        .input-line button {
+        .input-row button {
             width: 44px;
             height: 44px;
-            margin: 0;
             padding: 0;
             font-size: 20px;
         }
+        .back-btn {
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 14px;
+            margin-right: 12px;
+        }
+        .hidden { display: none; }
+        .search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .small-btn {
+            background: rgba(255,255,255,0.08);
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 12px;
+            cursor: pointer;
+        }
         .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .success, .error {
+            padding: 8px;
+            border-radius: 20px;
+            text-align: center;
+            font-size: 12px;
+            margin-top: 10px;
+            display: none;
+        }
+        .success { background: #10b981; }
+        .error { background: #ef4444; }
     </style>
 </head>
 <body>
 <div class="app" id="app">
-    <!-- Экран входа -->
-    <div id="loginScreen" class="screen">
-        <div class="logo-block">
-            <div class="logo-icon">💎</div>
-            <div class="logo-text">LUXA</div>
-            <div class="logo-sub">PREMIUM MESSENGER</div>
+    <!-- Страница входа -->
+    <div id="loginPage" class="page active" style="display: flex; flex-direction: column; justify-content: center;">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <div style="font-size: 64px; margin-bottom: 16px;">💎</div>
+            <div style="font-size: 32px; font-weight: 700;">LUXA</div>
+            <div style="font-size: 12px; opacity: 0.5;">PREMIUM MESSENGER</div>
         </div>
-        <div class="input-group">
-            <div class="input-label">📱 ТЕЛЕФОН</div>
-            <input type="tel" id="loginPhone" placeholder="+7 999 888 77 66">
+        <div class="input-group" style="margin-bottom: 16px;">
+            <input type="tel" id="loginPhone" placeholder="Телефон">
         </div>
-        <div class="input-group">
-            <div class="input-label">🏷️ ИМЯ</div>
-            <input type="text" id="loginName" placeholder="Ваше имя">
+        <div class="input-group" style="margin-bottom: 16px;">
+            <input type="text" id="loginName" placeholder="Имя">
         </div>
-        <button id="doLoginBtn">ВОЙТИ</button>
-        <div class="input-group" style="margin-top: 16px;">
-            <div class="input-label">✏️ ИЗМЕНИТЬ НИК</div>
+        <button id="doLoginBtn" style="margin-bottom: 20px;">ВОЙТИ</button>
+        <div class="input-group" style="margin-bottom: 16px;">
             <input type="text" id="newNick" placeholder="Новый ник">
         </div>
-        <button id="updateProfileBtn" class="btn-outline">ОБНОВИТЬ ПРОФИЛЬ</button>
+        <button id="updateProfileBtn" style="background: transparent; border: 1px solid rgba(255,255,255,0.2);">ОБНОВИТЬ ПРОФИЛЬ</button>
         <div id="successMsg" class="success"></div>
         <div id="errorMsg" class="error"></div>
     </div>
 
-    <!-- Основной экран -->
-    <div id="mainScreen" class="screen hidden">
-        <div class="flex-between">
-            <div class="logo-text" style="font-size: 22px;">💬 ЧАТЫ</div>
-            <div><span id="myName" style="font-weight:600;"></span></div>
+    <!-- Основной интерфейс -->
+    <div id="mainApp" style="display: none; flex-direction: column; flex: 1;">
+        <div class="header">
+            <div class="logo">LUXA</div>
+            <div class="profile-badge" id="userNameDisplay"></div>
         </div>
-        <div class="search-row">
-            <input type="text" id="globalSearch" placeholder="🔍 Поиск по ID или имени">
-            <button id="searchUserBtn">НАЙТИ</button>
-        </div>
-        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-            <div class="small-btn" id="tabFriendsBtn">👥 ДРУЗЬЯ</div>
-            <div class="small-btn" id="tabGlobalBtn">🌍 ОБЩИЙ ЧАТ</div>
-        </div>
-        <div id="friendsListPanel"></div>
-        <div id="globalChatPanel" class="hidden"></div>
-    </div>
 
-    <!-- Экран чата -->
-    <div id="chatDialog" class="screen hidden">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-            <button class="back-btn" id="closeChatBtn">←</button>
-            <div style="flex:1"><strong id="dialogName" style="color:white;"></strong><div id="dialogStatus" class="status"></div></div>
+        <!-- Страницы -->
+        <div id="chatsPage" class="page active">
+            <div class="flex-between">
+                <div style="font-weight: 600;">💬 ЧАТЫ</div>
+            </div>
+            <div id="friendsList"></div>
         </div>
-        <div id="chatMessages" class="messages-area"></div>
-        <div class="input-line">
-            <input type="text" id="msgInput" placeholder="Сообщение...">
-            <button id="sendMsgBtn">➤</button>
+
+        <div id="contactsPage" class="page">
+            <div class="search-row">
+                <input type="text" id="searchInput" placeholder="Поиск по ID или имени">
+                <button id="searchBtn" style="width: auto; padding: 12px 20px;">🔍</button>
+            </div>
+            <div id="searchResults"></div>
+        </div>
+
+        <div id="globalPage" class="page">
+            <div style="font-weight: 600; margin-bottom: 16px;">🌍 ОБЩИЙ ЧАТ</div>
+            <div id="globalMessages" style="flex:1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; height: 55vh;"></div>
+            <div class="input-row">
+                <input type="text" id="globalMsgInput" placeholder="Сообщение в общий чат...">
+                <button id="globalSendBtn">➤</button>
+            </div>
+        </div>
+
+        <!-- Экран чата (отдельный) -->
+        <div id="chatPage" class="page">
+            <div style="display: flex; align-items: center; margin-bottom: 16px;">
+                <button class="back-btn" id="closeChatBtn">← Назад</button>
+                <div style="flex:1; text-align: center; font-weight: 600;" id="chatPartnerName"></div>
+            </div>
+            <div id="chatMessagesArea" style="flex:1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; height: 60vh;"></div>
+            <div class="input-row">
+                <input type="text" id="chatMsgInput" placeholder="Сообщение...">
+                <button id="sendChatMsgBtn">➤</button>
+            </div>
+        </div>
+
+        <!-- Нижнее меню -->
+        <div class="bottom-menu">
+            <div class="menu-item active" data-page="chats">
+                <div class="menu-icon">💬</div>
+                <div class="menu-label">Чаты</div>
+            </div>
+            <div class="menu-item" data-page="contacts">
+                <div class="menu-icon">👥</div>
+                <div class="menu-label">Контакты</div>
+            </div>
+            <div class="menu-item" data-page="global">
+                <div class="menu-icon">🌍</div>
+                <div class="menu-label">Общий</div>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
-    // ========== API URL = ТОТ ЖЕ САМЫЙ САЙТ ==========
     const API = window.location.origin;
-    
     let currentUser = null;
     let activeChat = null;
     let currentFriends = [];
     let pollingInterval = null;
-    let currentTab = 'friends';
 
-    const loginDiv = document.getElementById('loginScreen');
-    const mainDiv = document.getElementById('mainScreen');
-    const chatDiv = document.getElementById('chatDialog');
-    const friendsPanel = document.getElementById('friendsListPanel');
-    const globalPanel = document.getElementById('globalChatPanel');
-    const chatMessagesDiv = document.getElementById('chatMessages');
-    const dialogNameSpan = document.getElementById('dialogName');
-    const dialogStatusSpan = document.getElementById('dialogStatus');
+    // DOM
+    const loginPage = document.getElementById('loginPage');
+    const mainApp = document.getElementById('mainApp');
+    const friendsListDiv = document.getElementById('friendsList');
+    const searchResultsDiv = document.getElementById('searchResults');
+    const globalMessagesDiv = document.getElementById('globalMessages');
+    const chatMessagesDiv = document.getElementById('chatMessagesArea');
+    const chatPartnerName = document.getElementById('chatPartnerName');
+    const userNameDisplay = document.getElementById('userNameDisplay');
 
-    function showSuccess(msg) {
-        const el = document.getElementById('successMsg');
-        el.textContent = msg;
-        el.style.display = 'block';
-        setTimeout(() => el.style.display = 'none', 3000);
-    }
-    function showError(msg) {
-        const el = document.getElementById('errorMsg');
-        el.textContent = msg;
-        el.style.display = 'block';
-        setTimeout(() => el.style.display = 'none', 3000);
-    }
-
+    // Авторизация
     async function registerOrUpdate(phone, username) {
         const res = await fetch(`${API}/register`, {
             method: 'POST',
@@ -369,7 +417,7 @@ HTML_PAGE = """
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (data.status === 'ok') return data.username;
-        throw new Error(data.message || 'Ошибка');
+        throw new Error('Ошибка');
     }
 
     document.getElementById('doLoginBtn').onclick = async () => {
@@ -381,7 +429,7 @@ HTML_PAGE = """
             currentUser = { phone, username: finalName };
             localStorage.setItem('luxa_user', JSON.stringify(currentUser));
             showSuccess(`Добро пожаловать, ${finalName}!`);
-            setTimeout(() => startApp(), 500);
+            setTimeout(() => initApp(), 500);
         } catch(e) { showError('Ошибка: ' + e.message); }
     };
 
@@ -397,10 +445,24 @@ HTML_PAGE = """
             showSuccess(`Ник изменён на "${newName}"`);
             document.getElementById('loginName').value = newName;
             document.getElementById('newNick').value = '';
-            if (document.getElementById('myName')) document.getElementById('myName').innerText = newName;
+            userNameDisplay.innerText = newName;
         } catch(e) { showError('Ошибка: ' + e.message); }
     };
 
+    function showSuccess(msg) {
+        const el = document.getElementById('successMsg');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+    function showError(msg) {
+        const el = document.getElementById('errorMsg');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    // Статус онлайн
     async function updateOnline() {
         if (!currentUser) return;
         try {
@@ -418,10 +480,10 @@ HTML_PAGE = """
             const url = isFriend ? `${API}/get_status/${phone}?viewer_phone=${currentUser.phone}` : `${API}/get_status/${phone}`;
             const res = await fetch(url);
             const data = await res.json();
-            if (data.is_online) return { text: 'онлайн', online: true };
-            if (isFriend && data.last_seen_text) return { text: data.last_seen_text, online: false };
-            return { text: 'не в сети', online: false };
-        } catch { return { text: '…', online: false }; }
+            if (data.is_online) return '🟢 онлайн';
+            if (isFriend && data.last_seen_text) return `⚫ ${data.last_seen_text}`;
+            return '⚫ не в сети';
+        } catch { return '⚫ ...'; }
     }
 
     async function loadFriends() {
@@ -431,7 +493,7 @@ HTML_PAGE = """
         return currentFriends;
     }
 
-    async function renderFriendsList() {
+    async function renderChats() {
         const friends = await loadFriends();
         const usersRes = await fetch(`${API}/users`);
         const allUsers = await usersRes.json();
@@ -444,27 +506,28 @@ HTML_PAGE = """
                         <div class="avatar">👤</div>
                         <div class="info">
                             <div class="name">${escapeHtml(name)}</div>
-                            <div class="status">${status.online ? '🟢 ' + status.text : '⚫ ' + status.text}</div>
+                            <div class="sub">${status}</div>
                         </div>
                         <div>💬</div>
                     </div>`;
         }
-        friendsPanel.innerHTML = html || '<div style="text-align:center; padding:40px;">➕ Добавьте друзей через поиск</div>';
+        friendsListDiv.innerHTML = html || '<div style="text-align:center; padding:40px;">➕ Добавьте друзей через вкладку "Контакты"</div>';
         document.querySelectorAll('.friend-card').forEach(card => {
             card.onclick = () => openChat(card.dataset.phone);
         });
     }
 
-    document.getElementById('searchUserBtn').onclick = async () => {
-        const query = document.getElementById('globalSearch').value.trim();
+    // Поиск пользователей
+    document.getElementById('searchBtn').onclick = async () => {
+        const query = document.getElementById('searchInput').value.trim();
         if (!query) return;
         const res = await fetch(`${API}/search_users?q=${encodeURIComponent(query)}`);
         const users = await res.json();
         const filtered = users.filter(u => u.phone !== currentUser.phone);
-        let html = `<div style="margin:12px 0 8px;"><strong>🔍 РЕЗУЛЬТАТЫ</strong></div>`;
+        let html = '';
         for (let u of filtered) {
             const isFriend = currentFriends.some(f => f.friend_phone === u.phone);
-            html += `<div class="friend-card" style="justify-content:space-between;">
+            html += `<div class="user-card" style="justify-content:space-between;">
                         <div style="display:flex; align-items:center; gap:14px;">
                             <div class="avatar">👤</div>
                             <div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div>
@@ -472,10 +535,8 @@ HTML_PAGE = """
                         ${!isFriend ? `<button class="small-btn" data-add="${u.phone}">➕ ДОБАВИТЬ</button>` : '<span style="opacity:0.5;">✓ друг</span>'}
                     </div>`;
         }
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        friendsPanel.prepend(temp);
-        temp.querySelectorAll('[data-add]').forEach(btn => {
+        searchResultsDiv.innerHTML = html || '<div style="text-align:center; padding:40px;">Ничего не найдено</div>';
+        document.querySelectorAll('[data-add]').forEach(btn => {
             btn.onclick = async (e) => {
                 const friendPhone = btn.dataset.add;
                 await fetch(`${API}/add_friend`, {
@@ -483,24 +544,23 @@ HTML_PAGE = """
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_phone: currentUser.phone, friend_phone: friendPhone })
                 });
-                await renderFriendsList();
+                await renderChats();
                 btn.remove();
             };
         });
     };
 
+    // Общий чат
     async function loadGlobalMessages() {
         const res = await fetch(`${API}/general_messages`);
         const data = await res.json();
-        const container = document.getElementById('globalMessages');
-        if (!container) return;
         let html = '';
         for (let m of data.messages || []) {
             const isOut = m.from === currentUser.phone;
-            html += `<div class="message ${isOut ? 'my-message' : 'their-message'}">${escapeHtml(m.text)}<div class="msg-time">${new Date(m.time).toLocaleTimeString()}</div></div>`;
+            html += `<div class="message-bubble ${isOut ? 'my-msg' : 'their-msg'}">${escapeHtml(m.text)}<div style="font-size:9px; opacity:0.5; margin-top:4px;">${new Date(m.time).toLocaleTimeString()}</div></div>`;
         }
-        container.innerHTML = html;
-        container.scrollTop = container.scrollHeight;
+        globalMessagesDiv.innerHTML = html;
+        globalMessagesDiv.scrollTop = globalMessagesDiv.scrollHeight;
     }
 
     async function sendGlobalMessage(text) {
@@ -512,29 +572,20 @@ HTML_PAGE = """
         loadGlobalMessages();
     }
 
-    function showGlobalChat() {
-        globalPanel.innerHTML = `<div id="globalMessages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding:8px 4px; height:55vh;"></div>
-            <div class="input-line"><input type="text" id="globalMsgInput" placeholder="Сообщение в общий чат..."><button id="globalSendBtn">➤</button></div>`;
-        loadGlobalMessages();
-        document.getElementById('globalSendBtn').onclick = () => {
-            const inp = document.getElementById('globalMsgInput');
-            if (inp.value.trim()) sendGlobalMessage(inp.value.trim());
-            inp.value = '';
-        };
-        if (window.glbInterval) clearInterval(window.glbInterval);
-        window.glbInterval = setInterval(loadGlobalMessages, 4000);
-    }
+    document.getElementById('globalSendBtn').onclick = () => {
+        const inp = document.getElementById('globalMsgInput');
+        if (inp.value.trim()) sendGlobalMessage(inp.value.trim());
+        inp.value = '';
+    };
 
+    // Личный чат
     async function openChat(phone) {
         activeChat = phone;
         const usersRes = await fetch(`${API}/users`);
         const users = await usersRes.json();
         const partner = users.find(u => u.phone === phone);
-        dialogNameSpan.innerText = partner ? partner.username : phone;
-        const status = await getUserStatus(phone, true);
-        dialogStatusSpan.innerText = status.text;
-        mainDiv.classList.add('hidden');
-        chatDiv.classList.remove('hidden');
+        chatPartnerName.innerText = partner ? partner.username : phone;
+        switchPage('chat');
         await loadPrivateMessages();
         if (pollingInterval) clearInterval(pollingInterval);
         pollingInterval = setInterval(loadPrivateMessages, 4000);
@@ -549,8 +600,8 @@ HTML_PAGE = """
         for (let m of data.messages || []) {
             const isOut = m.from === currentUser.phone;
             const div = document.createElement('div');
-            div.className = `message ${isOut ? 'my-message' : 'their-message'}`;
-            div.innerHTML = `${escapeHtml(m.text)}<div class="msg-time">${new Date(m.time).toLocaleTimeString()}</div>`;
+            div.className = `message-bubble ${isOut ? 'my-msg' : 'their-msg'}`;
+            div.innerHTML = `${escapeHtml(m.text)}<div style="font-size:9px; opacity:0.5; margin-top:4px;">${new Date(m.time).toLocaleTimeString()}</div>`;
             chatMessagesDiv.appendChild(div);
         }
         if (wasBottom) chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
@@ -566,43 +617,42 @@ HTML_PAGE = """
         await loadPrivateMessages();
     }
 
-    document.getElementById('sendMsgBtn').onclick = () => {
-        const inp = document.getElementById('msgInput');
+    document.getElementById('sendChatMsgBtn').onclick = () => {
+        const inp = document.getElementById('chatMsgInput');
         if (inp.value.trim()) sendPrivateMessage(inp.value.trim());
         inp.value = '';
     };
     document.getElementById('closeChatBtn').onclick = () => {
         if (pollingInterval) clearInterval(pollingInterval);
-        chatDiv.classList.add('hidden');
-        mainDiv.classList.remove('hidden');
         activeChat = null;
-        if (currentTab === 'friends') renderFriendsList();
-        else switchTab('global');
+        switchPage('chats');
+        renderChats();
     };
 
-    function switchTab(tab) {
-        currentTab = tab;
-        if (tab === 'friends') {
-            globalPanel.classList.add('hidden');
-            friendsPanel.classList.remove('hidden');
-            renderFriendsList();
-            if (window.glbInterval) clearInterval(window.glbInterval);
-        } else {
-            friendsPanel.classList.add('hidden');
-            globalPanel.classList.remove('hidden');
-            showGlobalChat();
-        }
+    // Навигация по страницам
+    function switchPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(`${pageId}Page`).classList.add('active');
+        document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
+        document.querySelector(`.menu-item[data-page="${pageId}"]`).classList.add('active');
+        if (pageId === 'chats') renderChats();
+        if (pageId === 'global') loadGlobalMessages();
     }
-    document.getElementById('tabFriendsBtn').onclick = () => switchTab('friends');
-    document.getElementById('tabGlobalBtn').onclick = () => switchTab('global');
 
-    async function startApp() {
-        document.getElementById('myName').innerText = currentUser.username;
-        loginDiv.classList.add('hidden');
-        mainDiv.classList.remove('hidden');
-        await updateOnline();
-        await renderFriendsList();
-        switchTab('friends');
+    document.querySelectorAll('.menu-item').forEach(item => {
+        item.onclick = () => switchPage(item.dataset.page);
+    });
+
+    // Инициализация
+    async function initApp() {
+        userNameDisplay.innerText = currentUser.username;
+        loginPage.style.display = 'none';
+        mainApp.style.display = 'flex';
+        renderChats();
+        switchPage('chats');
+        updateOnline();
+        if (window.glbInterval) clearInterval(window.glbInterval);
+        window.glbInterval = setInterval(loadGlobalMessages, 5000);
     }
 
     function escapeHtml(str) {
@@ -610,13 +660,14 @@ HTML_PAGE = """
         return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
     }
 
+    // Восстановление сессии
     const saved = localStorage.getItem('luxa_user');
     if (saved) {
         try {
             currentUser = JSON.parse(saved);
             document.getElementById('loginPhone').value = currentUser.phone;
             document.getElementById('loginName').value = currentUser.username;
-            startApp();
+            initApp();
         } catch(e) {}
     }
 </script>

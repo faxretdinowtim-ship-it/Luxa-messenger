@@ -1,14 +1,15 @@
-from fastapi import FastAPI, HTTPException, Depends, Form
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-import os
-import json
-import re
-import uvicorn
+from pydantic import BaseModel
 from datetime import datetime
+import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, select, or_, delete
+import uvicorn
 
-app = FastAPI(title="LUXA Messenger", description="Премиальный мессенджер с админ-панелью")
+app = FastAPI()
 
 # CORS
 app.add_middleware(
@@ -19,432 +20,719 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Админ авторизация
-security = HTTPBasic()
-ADMIN_PASSWORD = "2503"  # Пароль изменён
+# ========== БАЗА ДАННЫХ ==========
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite+aiosqlite:///./luxa.db"
+else:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-# Файл для хранения кастомных стилей
-CUSTOM_CSS_FILE = "custom_style.json"
-STYLES_HISTORY_FILE = "styles_history.json"
+engine = create_async_engine(DATABASE_URL, echo=False)
+AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+Base = declarative_base()
 
-def load_custom_css():
-    try:
-        with open(CUSTOM_CSS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return {"css": "", "history": [], "version": 1}
+# ========== МОДЕЛИ ==========
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    phone = Column(String(20), unique=True, nullable=False)
+    username = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-def save_custom_css(css_data):
-    with open(CUSTOM_CSS_FILE, "w", encoding="utf-8") as f:
-        json.dump(css_data, f, ensure_ascii=False, indent=2)
+class UserStatus(Base):
+    __tablename__ = "user_status"
+    id = Column(Integer, primary_key=True)
+    phone = Column(String(20), unique=True, nullable=False)
+    is_online = Column(Boolean, default=False)
+    last_seen = Column(DateTime, default=datetime.utcnow)
 
-def get_base_html():
-    try:
-        with open("index.html", "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return get_default_html()
+class Message(Base):
+    __tablename__ = "messages"
+    id = Column(Integer, primary_key=True)
+    from_phone = Column(String(20), nullable=False)
+    to_phone = Column(String(20), nullable=False)
+    text = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    message_type = Column(String(20), default="text")
 
-def get_default_html():
-    return """<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>LUXA — Premium Messenger</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif; background: #050508; min-height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; overflow: hidden; }
-        body::before { content: ''; position: fixed; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(ellipse at 20% 25%, rgba(139, 92, 246, 0.15), transparent 70%); z-index: -2; }
-        .app { width: 100%; max-width: 460px; height: 94vh; max-height: 800px; background: rgba(10, 10, 20, 0.7); backdrop-filter: blur(30px); border-radius: 52px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 35px 65px -25px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06); }
-        .screen { flex: 1; display: flex; flex-direction: column; padding: 28px 22px; overflow-y: auto; }
-        .hidden { display: none !important; }
-        .logo-block { text-align: center; margin-bottom: 40px; }
-        .logo-icon { width: 80px; height: 80px; background: linear-gradient(145deg, #FFFFFF, #E2E2FF); border-radius: 35px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 44px; }
-        .logo-text { font-size: 34px; font-weight: 800; letter-spacing: -1.5px; background: linear-gradient(135deg, #FFFFFF 20%, #C4B5FD 60%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .logo-sub { font-size: 11px; letter-spacing: 2px; color: rgba(255,255,255,0.45); }
-        .input-field { margin-bottom: 20px; }
-        .input-label { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: rgba(255,255,255,0.6); padding-left: 14px; }
-        input { width: 100%; padding: 18px 22px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 44px; color: white; font-size: 16px; outline: none; }
-        input:focus { border-color: #8B5CF6; background: rgba(255,255,255,0.08); }
-        .btn-primary { width: 100%; padding: 18px; background: linear-gradient(105deg, #7C3AED, #6366F1); border: none; border-radius: 48px; color: white; font-weight: 700; font-size: 17px; cursor: pointer; }
-        .status-group { display: flex; gap: 12px; margin-top: 20px; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 60px; }
-        .status-chip { flex: 1; text-align: center; padding: 10px; border-radius: 50px; font-size: 13px; color: rgba(255,255,255,0.5); cursor: pointer; }
-        .status-chip.active { background: rgba(124, 58, 237, 0.35); color: white; }
-        .chat-card { background: rgba(255,255,255,0.04); margin-bottom: 14px; border-radius: 32px; padding: 12px 16px; display: flex; align-items: center; gap: 16px; cursor: pointer; border: 0.5px solid rgba(255,255,255,0.05); }
-        .avatar { width: 58px; height: 58px; background: linear-gradient(145deg, #4F46E5, #6D28D9); border-radius: 32px; display: flex; align-items: center; justify-content: center; font-size: 30px; }
-        .chat-info { flex: 1; }
-        .chat-name { font-weight: 700; font-size: 17px; }
-        .chat-preview { font-size: 12px; opacity: 0.6; }
-        .chat-header { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; padding-bottom: 14px; border-bottom: 0.5px solid rgba(255,255,255,0.08); }
-        .back-btn { width: 44px; height: 44px; background: rgba(255,255,255,0.06); border: none; border-radius: 30px; font-size: 24px; cursor: pointer; }
-        .messages-area { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px 4px 20px; }
-        .message { max-width: 80%; padding: 12px 18px; border-radius: 28px; font-size: 15px; animation: messageSlide 0.3s ease; }
-        @keyframes messageSlide { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .my-message { background: #7C3AED; align-self: flex-end; border-bottom-right-radius: 8px; color: white; }
-        .their-message { background: rgba(255,255,255,0.08); align-self: flex-start; border-bottom-left-radius: 8px; color: white; }
-        .message-time { font-size: 9px; opacity: 0.55; margin-top: 5px; text-align: right; }
-        .typing-bubble { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.08); width: fit-content; padding: 10px 18px; border-radius: 30px; }
-        .dot { width: 6px; height: 6px; background: #A78BFA; border-radius: 50%; animation: typingPulse 1.2s infinite; }
-        @keyframes typingPulse { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
-        .input-bar { display: flex; gap: 12px; background: rgba(255,255,255,0.04); border-radius: 50px; padding: 6px 6px 6px 22px; }
-        .input-bar input { background: transparent; border: none; padding: 14px 0; }
-        .input-bar button { width: 50px; height: 50px; background: #7C3AED; border-radius: 40px; font-size: 22px; }
-        ::-webkit-scrollbar { width: 3px; }
-        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
-        ::-webkit-scrollbar-thumb { background: #7C3AED; border-radius: 10px; }
-    </style>
-</head>
-<body>
-<div class="app" id="app">...</div>
-</body>
-</html>"""
+class GeneralMessage(Base):
+    __tablename__ = "general_messages"
+    id = Column(Integer, primary_key=True)
+    from_phone = Column(String(20), nullable=False)
+    text = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    message_type = Column(String(20), default="text")
 
-def inject_custom_css(html_content, custom_css):
-    if not custom_css:
-        return html_content
-    pattern = r'(</style>)'
-    replacement = custom_css + r'\n</style>'
-    return re.sub(pattern, replacement, html_content, count=1, flags=re.DOTALL)
+class Friend(Base):
+    __tablename__ = "friends"
+    id = Column(Integer, primary_key=True)
+    user_phone = Column(String(20), nullable=False)
+    friend_phone = Column(String(20), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-@app.get("/")
-@app.get("/web")
-async def root():
-    html = get_base_html()
-    custom_data = load_custom_css()
-    if custom_data.get("css"):
-        html = inject_custom_css(html, custom_data["css"])
-    return HTMLResponse(content=html)
+# ========== PYDANTIC ==========
+class PhoneRequest(BaseModel): phone: str
+class UserRegister(BaseModel): phone: str; username: str
+class MessageSend(BaseModel): from_phone: str; to_phone: str; text: str; message_type: str = "text"
+class GeneralMessageSend(BaseModel): from_phone: str; text: str; message_type: str = "text"
+class FriendAction(BaseModel): user_phone: str; friend_phone: str
+class DeleteChat(BaseModel): user_phone: str; other_phone: str
 
-# ========== АДМИН-ПАНЕЛЬ (пароль 2503) ==========
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
 
-ADMIN_HTML = """
+@app.on_event("startup")
+async def startup():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("✅ Сервер и БД готовы!")
+
+# ========== HTML СТРАНИЦА (фронтенд) ==========
+HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LUXA Admin — Редактор дизайна</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>LUXA — мессенджер</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0a0a1a, #0f0f1f);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #050508;
             min-height: 100vh;
-            padding: 40px 20px;
-            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; background: linear-gradient(135deg, #fff, #a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .sub { color: rgba(255,255,255,0.5); margin-bottom: 30px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
-        .card {
-            background: rgba(255,255,255,0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 28px;
-            padding: 24px;
-            border: 0.5px solid rgba(255,255,255,0.1);
-        }
-        .card h3 { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
-        textarea {
+        .app {
             width: 100%;
-            min-height: 400px;
-            background: rgba(0,0,0,0.5);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 20px;
-            padding: 20px;
-            color: #d4d4d4;
-            font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.5;
-            resize: vertical;
+            max-width: 480px;
+            height: 95vh;
+            background: rgba(12, 12, 20, 0.9);
+            backdrop-filter: blur(32px);
+            border-radius: 48px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
         }
-        .btn {
-            background: linear-gradient(105deg, #7C3AED, #6366F1);
-            border: none;
-            border-radius: 40px;
-            padding: 14px 28px;
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 16px;
-            margin-right: 12px;
-            transition: 0.2s;
+        .screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 24px 20px;
+            overflow-y: auto;
         }
-        .btn-secondary { background: rgba(255,255,255,0.1); }
-        .btn:hover { transform: translateY(-2px); }
-        .preview {
-            background: rgba(0,0,0,0.3);
-            border-radius: 20px;
-            padding: 16px;
-            margin-top: 16px;
-            font-size: 12px;
-            font-family: monospace;
-            max-height: 200px;
-            overflow: auto;
+        .hidden { display: none !important; }
+        .logo-block { text-align: center; margin-bottom: 32px; }
+        .logo-icon {
+            width: 64px; height: 64px;
+            background: linear-gradient(145deg, #fff, #ddd);
+            border-radius: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 32px;
         }
-        .success { color: #4ade80; margin-top: 12px; }
-        .error { color: #f87171; margin-top: 12px; }
-        .preset-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
-        .preset-btn {
-            background: rgba(255,255,255,0.08);
-            border: none;
-            border-radius: 40px;
-            padding: 8px 18px;
-            color: #a78bfa;
-            cursor: pointer;
-            font-size: 13px;
-        }
-        .history-item {
-            background: rgba(255,255,255,0.03);
-            border-radius: 16px;
-            padding: 12px;
-            margin-bottom: 10px;
-        }
-        .history-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .history-name { font-weight: 600; }
-        .history-time { font-size: 11px; opacity: 0.5; }
-        .history-preview { font-size: 11px; opacity: 0.6; margin-bottom: 8px; }
-        .restore-btn { background: rgba(255,255,255,0.1); border: none; border-radius: 30px; padding: 6px 14px; color: #a78bfa; cursor: pointer; font-size: 12px; }
-        input, select {
+        .logo-text { font-size: 28px; font-weight: 700; color: white; }
+        .logo-sub { font-size: 11px; color: rgba(255,255,255,0.45); }
+        .input-group { margin-bottom: 16px; }
+        .input-label { font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 6px; padding-left: 12px; }
+        input {
             width: 100%;
             padding: 14px 18px;
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 24px;
+            border-radius: 40px;
             color: white;
-            margin-bottom: 16px;
+            font-size: 15px;
+            outline: none;
         }
+        button {
+            background: #7C3AED;
+            border: none;
+            border-radius: 44px;
+            padding: 14px;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 12px;
+            width: 100%;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .success, .error {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 30px;
+            text-align: center;
+            font-size: 13px;
+            display: none;
+        }
+        .success { background: #10b981; }
+        .error { background: #ef4444; }
+        .friend-card, .chat-card {
+            background: rgba(255,255,255,0.04);
+            border-radius: 28px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            cursor: pointer;
+            border: 0.5px solid rgba(255,255,255,0.05);
+        }
+        .avatar {
+            width: 48px; height: 48px;
+            background: linear-gradient(145deg, #4F46E5, #6D28D9);
+            border-radius: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        .info { flex: 1; }
+        .name { font-weight: 600; font-size: 15px; color: white; }
+        .status { font-size: 11px; opacity: 0.6; margin-top: 3px; }
+        .message {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 24px;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+        .my-message {
+            background: #7C3AED;
+            align-self: flex-end;
+            border-bottom-right-radius: 6px;
+        }
+        .their-message {
+            background: rgba(255,255,255,0.08);
+            align-self: flex-start;
+            border-bottom-left-radius: 6px;
+        }
+        .msg-time { font-size: 9px; opacity: 0.5; margin-top: 4px; text-align: right; }
+        .search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .search-row input { flex: 1; margin: 0; }
+        .search-row button { width: auto; padding: 0 16px; margin: 0; }
+        .small-btn {
+            background: rgba(255,255,255,0.08);
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 13px;
+            cursor: pointer;
+            display: inline-block;
+        }
+        .back-btn {
+            width: 40px; height: 40px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 30px;
+            font-size: 22px;
+            cursor: pointer;
+        }
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px 4px;
+        }
+        .input-line {
+            display: flex;
+            gap: 8px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 50px;
+            padding: 6px 6px 6px 18px;
+            margin-top: 12px;
+        }
+        .input-line input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 10px 0;
+            margin: 0;
+        }
+        .input-line button {
+            width: 44px;
+            height: 44px;
+            margin: 0;
+            padding: 0;
+            font-size: 20px;
+        }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎨 LUXA Admin Panel</h1>
-        <div class="sub">Редактирование дизайна — пароль: 2503</div>
-        
-        <div class="grid">
-            <div class="card">
-                <h3>📝 Редактор CSS</h3>
-                <div class="preset-btns">
-                    <button class="preset-btn" onclick="loadPreset('glass')">Стекло</button>
-                    <button class="preset-btn" onclick="loadPreset('neon')">Неон</button>
-                    <button class="preset-btn" onclick="loadPreset('dark')">Тёмный</button>
-                    <button class="preset-btn" onclick="loadPreset('luxury')">Золотой</button>
-                    <button class="preset-btn" onclick="loadPreset('reset')">Сброс</button>
-                </div>
-                <textarea id="cssEditor" placeholder="Введите свой CSS код..."></textarea>
-                <button class="btn" onclick="saveCSS()">💾 Сохранить изменения</button>
-                <button class="btn btn-secondary" onclick="previewCSS()">👁 Предпросмотр</button>
-                <div id="statusMsg" class="success"></div>
-            </div>
-            
-            <div class="card">
-                <h3>📦 История изменений</h3>
-                <div id="historyList" style="max-height: 400px; overflow-y: auto;">
-                    <div style="color: rgba(255,255,255,0.4); text-align: center;">Загрузка...</div>
-                </div>
-            </div>
+<div class="app" id="app">
+    <!-- Экран входа -->
+    <div id="loginScreen" class="screen">
+        <div class="logo-block">
+            <div class="logo-icon">💎</div>
+            <div class="logo-text">LUXA</div>
+            <div class="logo-sub">PREMIUM MESSENGER</div>
         </div>
-        
-        <div class="card" style="margin-top: 24px;">
-            <h3>🔧 Быстрые ссылки</h3>
-            <button class="btn" onclick="window.open('/web', '_blank')">📱 Открыть мессенджер</button>
-            <button class="btn btn-secondary" onclick="location.reload()">🔄 Обновить</button>
+        <div class="input-group">
+            <div class="input-label">📱 ТЕЛЕФОН</div>
+            <input type="tel" id="loginPhone" placeholder="+7 999 888 77 66">
         </div>
+        <div class="input-group">
+            <div class="input-label">🏷️ ИМЯ</div>
+            <input type="text" id="loginName" placeholder="Ваше имя">
+        </div>
+        <button id="doLoginBtn">ВОЙТИ</button>
+        <div class="input-group" style="margin-top: 16px;">
+            <div class="input-label">✏️ ИЗМЕНИТЬ НИК</div>
+            <input type="text" id="newNick" placeholder="Новый ник">
+        </div>
+        <button id="updateProfileBtn" class="btn-outline">ОБНОВИТЬ ПРОФИЛЬ</button>
+        <div id="successMsg" class="success"></div>
+        <div id="errorMsg" class="error"></div>
     </div>
 
-    <script>
-        let saveTimeout = null;
-        
-        async function saveCSS() {
-            const css = document.getElementById('cssEditor').value;
-            const password = prompt('Введите пароль администратора (2503):');
-            if (!password) return;
-            
-            const formData = new FormData();
-            formData.append('css', css);
-            formData.append('password', password);
-            
-            try {
-                const res = await fetch('/admin/save_css', { method: 'POST', body: formData });
-                const data = await res.json();
-                const msgDiv = document.getElementById('statusMsg');
-                if (res.ok) {
-                    msgDiv.innerHTML = '✅ Дизайн сохранён! Обновите страницу мессенджера.';
-                    msgDiv.style.color = '#4ade80';
-                    loadHistory();
-                    setTimeout(() => { msgDiv.innerHTML = ''; }, 3000);
-                } else {
-                    msgDiv.innerHTML = '❌ ' + data.detail;
-                    msgDiv.style.color = '#f87171';
-                }
-            } catch(e) {
-                alert('Ошибка: ' + e.message);
-            }
-        }
-        
-        async function previewCSS() {
-            const css = document.getElementById('cssEditor').value;
-            const win = window.open();
-            win.document.write('<html><head><title>LUXA Preview</title><style>' + css + '</style></head><body style="margin:0;"><iframe src="/web" style="width:100%;height:100vh;border:none;"></iframe></body></html>');
-        }
-        
-        async function loadHistory() {
-            try {
-                const res = await fetch('/admin/history');
-                const data = await res.json();
-                const historyDiv = document.getElementById('historyList');
-                if (data.history && data.history.length > 0) {
-                    historyDiv.innerHTML = data.history.map(item => `
-                        <div class="history-item">
-                            <div class="history-header">
-                                <span class="history-name">${escapeHtml(item.name)}</span>
-                                <span class="history-time">${item.timestamp}</span>
-                            </div>
-                            <div class="history-preview">${escapeHtml(item.preview)}</div>
-                            <button class="restore-btn" onclick="restoreVersion(${item.id})">↩️ Восстановить</button>
+    <!-- Основной экран -->
+    <div id="mainScreen" class="screen hidden">
+        <div class="flex-between">
+            <div class="logo-text" style="font-size: 22px;">💬 ЧАТЫ</div>
+            <div><span id="myName" style="font-weight:600;"></span></div>
+        </div>
+        <div class="search-row">
+            <input type="text" id="globalSearch" placeholder="🔍 Поиск по ID или имени">
+            <button id="searchUserBtn">НАЙТИ</button>
+        </div>
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <div class="small-btn" id="tabFriendsBtn">👥 ДРУЗЬЯ</div>
+            <div class="small-btn" id="tabGlobalBtn">🌍 ОБЩИЙ ЧАТ</div>
+        </div>
+        <div id="friendsListPanel"></div>
+        <div id="globalChatPanel" class="hidden"></div>
+    </div>
+
+    <!-- Экран чата -->
+    <div id="chatDialog" class="screen hidden">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <button class="back-btn" id="closeChatBtn">←</button>
+            <div style="flex:1"><strong id="dialogName" style="color:white;"></strong><div id="dialogStatus" class="status"></div></div>
+        </div>
+        <div id="chatMessages" class="messages-area"></div>
+        <div class="input-line">
+            <input type="text" id="msgInput" placeholder="Сообщение...">
+            <button id="sendMsgBtn">➤</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ========== API URL = ТОТ ЖЕ САМЫЙ САЙТ ==========
+    const API = window.location.origin;
+    
+    let currentUser = null;
+    let activeChat = null;
+    let currentFriends = [];
+    let pollingInterval = null;
+    let currentTab = 'friends';
+
+    const loginDiv = document.getElementById('loginScreen');
+    const mainDiv = document.getElementById('mainScreen');
+    const chatDiv = document.getElementById('chatDialog');
+    const friendsPanel = document.getElementById('friendsListPanel');
+    const globalPanel = document.getElementById('globalChatPanel');
+    const chatMessagesDiv = document.getElementById('chatMessages');
+    const dialogNameSpan = document.getElementById('dialogName');
+    const dialogStatusSpan = document.getElementById('dialogStatus');
+
+    function showSuccess(msg) {
+        const el = document.getElementById('successMsg');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+    function showError(msg) {
+        const el = document.getElementById('errorMsg');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    async function registerOrUpdate(phone, username) {
+        const res = await fetch(`${API}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, username })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.status === 'ok') return data.username;
+        throw new Error(data.message || 'Ошибка');
+    }
+
+    document.getElementById('doLoginBtn').onclick = async () => {
+        const phone = document.getElementById('loginPhone').value.trim();
+        const username = document.getElementById('loginName').value.trim();
+        if (!phone || !username) { showError('Заполните поля'); return; }
+        try {
+            const finalName = await registerOrUpdate(phone, username);
+            currentUser = { phone, username: finalName };
+            localStorage.setItem('luxa_user', JSON.stringify(currentUser));
+            showSuccess(`Добро пожаловать, ${finalName}!`);
+            setTimeout(() => startApp(), 500);
+        } catch(e) { showError('Ошибка: ' + e.message); }
+    };
+
+    document.getElementById('updateProfileBtn').onclick = async () => {
+        const newNick = document.getElementById('newNick').value.trim();
+        if (!newNick) { showError('Введите новый ник'); return; }
+        let phone = currentUser?.phone || document.getElementById('loginPhone').value.trim();
+        if (!phone) { showError('Сначала войдите'); return; }
+        try {
+            const newName = await registerOrUpdate(phone, newNick);
+            if (currentUser) currentUser.username = newName;
+            localStorage.setItem('luxa_user', JSON.stringify(currentUser));
+            showSuccess(`Ник изменён на "${newName}"`);
+            document.getElementById('loginName').value = newName;
+            document.getElementById('newNick').value = '';
+            if (document.getElementById('myName')) document.getElementById('myName').innerText = newName;
+        } catch(e) { showError('Ошибка: ' + e.message); }
+    };
+
+    async function updateOnline() {
+        if (!currentUser) return;
+        try {
+            await fetch(`${API}/update_status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: currentUser.phone })
+            });
+        } catch(e) {}
+    }
+    setInterval(updateOnline, 20000);
+
+    async function getUserStatus(phone, isFriend) {
+        try {
+            const url = isFriend ? `${API}/get_status/${phone}?viewer_phone=${currentUser.phone}` : `${API}/get_status/${phone}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.is_online) return { text: 'онлайн', online: true };
+            if (isFriend && data.last_seen_text) return { text: data.last_seen_text, online: false };
+            return { text: 'не в сети', online: false };
+        } catch { return { text: '…', online: false }; }
+    }
+
+    async function loadFriends() {
+        const res = await fetch(`${API}/friends/${currentUser.phone}`);
+        const data = await res.json();
+        currentFriends = data;
+        return currentFriends;
+    }
+
+    async function renderFriendsList() {
+        const friends = await loadFriends();
+        const usersRes = await fetch(`${API}/users`);
+        const allUsers = await usersRes.json();
+        let html = '';
+        for (let f of friends) {
+            const user = allUsers.find(u => u.phone === f.friend_phone);
+            const name = user ? user.username : f.friend_phone;
+            const status = await getUserStatus(f.friend_phone, true);
+            html += `<div class="friend-card" data-phone="${f.friend_phone}">
+                        <div class="avatar">👤</div>
+                        <div class="info">
+                            <div class="name">${escapeHtml(name)}</div>
+                            <div class="status">${status.online ? '🟢 ' + status.text : '⚫ ' + status.text}</div>
                         </div>
-                    `).join('');
-                } else {
-                    historyDiv.innerHTML = '<div style="text-align:center; opacity:0.5;">История пуста</div>';
-                }
-            } catch(e) {}
+                        <div>💬</div>
+                    </div>`;
         }
-        
-        async function restoreVersion(id) {
-            const password = prompt('Введите пароль администратора (2503):');
-            if (!password) return;
-            const formData = new FormData();
-            formData.append('version_id', id);
-            formData.append('password', password);
-            try {
-                const res = await fetch('/admin/restore', { method: 'POST', body: formData });
-                const data = await res.json();
-                if (res.ok) {
-                    alert(data.message);
-                    await loadCurrentCSS();
-                    await loadHistory();
-                } else {
-                    alert('Ошибка: ' + data.detail);
-                }
-            } catch(e) {
-                alert('Ошибка: ' + e.message);
-            }
+        friendsPanel.innerHTML = html || '<div style="text-align:center; padding:40px;">➕ Добавьте друзей через поиск</div>';
+        document.querySelectorAll('.friend-card').forEach(card => {
+            card.onclick = () => openChat(card.dataset.phone);
+        });
+    }
+
+    document.getElementById('searchUserBtn').onclick = async () => {
+        const query = document.getElementById('globalSearch').value.trim();
+        if (!query) return;
+        const res = await fetch(`${API}/search_users?q=${encodeURIComponent(query)}`);
+        const users = await res.json();
+        const filtered = users.filter(u => u.phone !== currentUser.phone);
+        let html = `<div style="margin:12px 0 8px;"><strong>🔍 РЕЗУЛЬТАТЫ</strong></div>`;
+        for (let u of filtered) {
+            const isFriend = currentFriends.some(f => f.friend_phone === u.phone);
+            html += `<div class="friend-card" style="justify-content:space-between;">
+                        <div style="display:flex; align-items:center; gap:14px;">
+                            <div class="avatar">👤</div>
+                            <div><strong>${escapeHtml(u.username)}</strong><br><small>${u.phone}</small></div>
+                        </div>
+                        ${!isFriend ? `<button class="small-btn" data-add="${u.phone}">➕ ДОБАВИТЬ</button>` : '<span style="opacity:0.5;">✓ друг</span>'}
+                    </div>`;
         }
-        
-        async function loadCurrentCSS() {
-            try {
-                const res = await fetch('/admin/current_css');
-                const data = await res.json();
-                document.getElementById('cssEditor').value = data.css || '';
-            } catch(e) {}
-        }
-        
-        function loadPreset(type) {
-            const presets = {
-                glass: `/* Премиум стекло */
-.app { background: rgba(20, 20, 40, 0.55); backdrop-filter: blur(40px); }
-.message { border-radius: 30px; }
-.my-message { background: linear-gradient(135deg, #667eea, #764ba2); }
-.their-message { background: rgba(255,255,255,0.1); }`,
-                neon: `/* Неоновый стиль */
-.my-message { background: #ff00ff; box-shadow: 0 0 15px #ff00ff; }
-.their-message { background: #00ffff; box-shadow: 0 0 10px #00ffff; color: black; }
-.chat-card:hover { box-shadow: 0 0 15px rgba(0,255,255,0.3); }
-.btn-primary, .input-bar button { background: linear-gradient(105deg, #ff00ff, #00ffff); }`,
-                dark: `/* Ультра-тёмный */
-body { background: #000; }
-.app { background: rgba(0,0,0,0.85); }
-.my-message { background: #1a1a2e; border: 1px solid #333; }
-.their-message { background: #0d0d1a; }
-.chat-card { background: rgba(255,255,255,0.02); }`,
-                luxury: `/* Золотой люкс */
-.my-message { background: linear-gradient(135deg, #FFD700, #FFA500); color: #1a1a2e; font-weight: bold; }
-.logo-text { background: linear-gradient(135deg, #FFD700, #FFA500); -webkit-background-clip: text; }
-.btn-primary, .input-bar button { background: linear-gradient(135deg, #FFD700, #FFA500); color: #1a1a2e; }
-.avatar { background: linear-gradient(145deg, #FFD700, #FFA500); }`,
-                reset: ``
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        friendsPanel.prepend(temp);
+        temp.querySelectorAll('[data-add]').forEach(btn => {
+            btn.onclick = async (e) => {
+                const friendPhone = btn.dataset.add;
+                await fetch(`${API}/add_friend`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_phone: currentUser.phone, friend_phone: friendPhone })
+                });
+                await renderFriendsList();
+                btn.remove();
             };
-            document.getElementById('cssEditor').value = presets[type] || '';
+        });
+    };
+
+    async function loadGlobalMessages() {
+        const res = await fetch(`${API}/general_messages`);
+        const data = await res.json();
+        const container = document.getElementById('globalMessages');
+        if (!container) return;
+        let html = '';
+        for (let m of data.messages || []) {
+            const isOut = m.from === currentUser.phone;
+            html += `<div class="message ${isOut ? 'my-message' : 'their-message'}">${escapeHtml(m.text)}<div class="msg-time">${new Date(m.time).toLocaleTimeString()}</div></div>`;
         }
-        
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+    }
+
+    async function sendGlobalMessage(text) {
+        await fetch(`${API}/send_general`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from_phone: currentUser.phone, text, message_type: 'text' })
+        });
+        loadGlobalMessages();
+    }
+
+    function showGlobalChat() {
+        globalPanel.innerHTML = `<div id="globalMessages" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding:8px 4px; height:55vh;"></div>
+            <div class="input-line"><input type="text" id="globalMsgInput" placeholder="Сообщение в общий чат..."><button id="globalSendBtn">➤</button></div>`;
+        loadGlobalMessages();
+        document.getElementById('globalSendBtn').onclick = () => {
+            const inp = document.getElementById('globalMsgInput');
+            if (inp.value.trim()) sendGlobalMessage(inp.value.trim());
+            inp.value = '';
+        };
+        if (window.glbInterval) clearInterval(window.glbInterval);
+        window.glbInterval = setInterval(loadGlobalMessages, 4000);
+    }
+
+    async function openChat(phone) {
+        activeChat = phone;
+        const usersRes = await fetch(`${API}/users`);
+        const users = await usersRes.json();
+        const partner = users.find(u => u.phone === phone);
+        dialogNameSpan.innerText = partner ? partner.username : phone;
+        const status = await getUserStatus(phone, true);
+        dialogStatusSpan.innerText = status.text;
+        mainDiv.classList.add('hidden');
+        chatDiv.classList.remove('hidden');
+        await loadPrivateMessages();
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(loadPrivateMessages, 4000);
+    }
+
+    async function loadPrivateMessages() {
+        if (!activeChat) return;
+        const res = await fetch(`${API}/dialog/${currentUser.phone}/${activeChat}`);
+        const data = await res.json();
+        const wasBottom = chatMessagesDiv.scrollHeight - chatMessagesDiv.scrollTop - chatMessagesDiv.clientHeight < 50;
+        chatMessagesDiv.innerHTML = '';
+        for (let m of data.messages || []) {
+            const isOut = m.from === currentUser.phone;
+            const div = document.createElement('div');
+            div.className = `message ${isOut ? 'my-message' : 'their-message'}`;
+            div.innerHTML = `${escapeHtml(m.text)}<div class="msg-time">${new Date(m.time).toLocaleTimeString()}</div>`;
+            chatMessagesDiv.appendChild(div);
         }
-        
-        loadCurrentCSS();
-        loadHistory();
-    </script>
+        if (wasBottom) chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+    }
+
+    async function sendPrivateMessage(text) {
+        if (!activeChat) return;
+        await fetch(`${API}/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from_phone: currentUser.phone, to_phone: activeChat, text, message_type: 'text' })
+        });
+        await loadPrivateMessages();
+    }
+
+    document.getElementById('sendMsgBtn').onclick = () => {
+        const inp = document.getElementById('msgInput');
+        if (inp.value.trim()) sendPrivateMessage(inp.value.trim());
+        inp.value = '';
+    };
+    document.getElementById('closeChatBtn').onclick = () => {
+        if (pollingInterval) clearInterval(pollingInterval);
+        chatDiv.classList.add('hidden');
+        mainDiv.classList.remove('hidden');
+        activeChat = null;
+        if (currentTab === 'friends') renderFriendsList();
+        else switchTab('global');
+    };
+
+    function switchTab(tab) {
+        currentTab = tab;
+        if (tab === 'friends') {
+            globalPanel.classList.add('hidden');
+            friendsPanel.classList.remove('hidden');
+            renderFriendsList();
+            if (window.glbInterval) clearInterval(window.glbInterval);
+        } else {
+            friendsPanel.classList.add('hidden');
+            globalPanel.classList.remove('hidden');
+            showGlobalChat();
+        }
+    }
+    document.getElementById('tabFriendsBtn').onclick = () => switchTab('friends');
+    document.getElementById('tabGlobalBtn').onclick = () => switchTab('global');
+
+    async function startApp() {
+        document.getElementById('myName').innerText = currentUser.username;
+        loginDiv.classList.add('hidden');
+        mainDiv.classList.remove('hidden');
+        await updateOnline();
+        await renderFriendsList();
+        switchTab('friends');
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
+    }
+
+    const saved = localStorage.getItem('luxa_user');
+    if (saved) {
+        try {
+            currentUser = JSON.parse(saved);
+            document.getElementById('loginPhone').value = currentUser.phone;
+            document.getElementById('loginName').value = currentUser.username;
+            startApp();
+        } catch(e) {}
+    }
+</script>
 </body>
 </html>
 """
 
-@app.get("/admin")
-async def admin_panel():
-    return HTMLResponse(content=ADMIN_HTML)
+@app.get("/")
+@app.get("/web")
+async def serve_index():
+    return HTMLResponse(content=HTML_PAGE)
 
-@app.post("/admin/save_css")
-async def save_css(
-    css: str = Form(...),
-    password: str = Form(...)
-):
-    if password != ADMIN_PASSWORD:
-        raise HTTPException(status_code=403, detail="Неверный пароль")
-    
-    custom_data = load_custom_css()
-    history = custom_data.get("history", [])
-    
-    # Сохраняем версию в историю
-    history.insert(0, {
-        "id": len(history) + 1,
-        "name": f"Версия от {datetime.now().strftime('%H:%M:%S %d.%m')}",
-        "timestamp": datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-        "preview": css[:150] + "..." if len(css) > 150 else css
-    })
-    
-    # Ограничиваем историю 20 версиями
-    if len(history) > 20:
-        history = history[:20]
-    
-    custom_data["css"] = css
-    custom_data["history"] = history
-    custom_data["version"] = custom_data.get("version", 0) + 1
-    save_custom_css(custom_data)
-    
-    return {"status": "ok", "message": "CSS сохранён"}
+# ========== API ЭНДПОИНТЫ ==========
 
-@app.get("/admin/current_css")
-async def get_current_css():
-    custom_data = load_custom_css()
-    return {"css": custom_data.get("css", "")}
+@app.post("/register")
+async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.phone == data.phone))
+    user = result.scalar_one_or_none()
+    if user:
+        return {"status": "ok", "username": user.username}
+    new_user = User(phone=data.phone, username=data.username)
+    db.add(new_user)
+    await db.commit()
+    return {"status": "ok", "username": data.username}
 
-@app.get("/admin/history")
-async def get_history():
-    custom_data = load_custom_css()
-    return {"history": custom_data.get("history", [])}
+@app.post("/update_status")
+async def update_status(req: PhoneRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(UserStatus).where(UserStatus.phone == req.phone))
+    status = result.scalar_one_or_none()
+    if status:
+        status.is_online = True
+        status.last_seen = datetime.utcnow()
+    else:
+        status = UserStatus(phone=req.phone, is_online=True, last_seen=datetime.utcnow())
+        db.add(status)
+    await db.commit()
+    return {"status": "ok"}
 
-@app.post("/admin/restore")
-async def restore_version(
-    version_id: int = Form(...),
-    password: str = Form(...)
-):
-    if password != ADMIN_PASSWORD:
-        raise HTTPException(status_code=403, detail="Неверный пароль")
-    
-    custom_data = load_custom_css()
-    history = custom_data.get("history", [])
-    version = next((v for v in history if v["id"] == version_id), None)
-    
-    if not version:
-        raise HTTPException(status_code=404, detail="Версия не найдена")
-    
-    return {"status": "ok", "message": f"Версия '{version['name']}' выбрана. Скопируйте CSS из истории для восстановления"}
+@app.get("/get_status/{phone}")
+async def get_status(phone: str, viewer_phone: str = None, db: AsyncSession = Depends(get_db)):
+    is_friend = False
+    if viewer_phone:
+        result = await db.execute(select(Friend).where(Friend.user_phone == viewer_phone, Friend.friend_phone == phone))
+        is_friend = result.scalar_one_or_none() is not None
+    result = await db.execute(select(UserStatus).where(UserStatus.phone == phone))
+    status = result.scalar_one_or_none()
+    if not status:
+        return {"is_online": False, "last_seen_text": "неизвестно"}
+    if status.is_online:
+        return {"is_online": True, "last_seen_text": "онлайн"}
+    if is_friend:
+        diff = datetime.utcnow() - status.last_seen
+        if diff.days > 0:
+            last_text = f"{diff.days} дн. назад"
+        elif diff.seconds > 3600:
+            last_text = f"{diff.seconds // 3600} ч. назад"
+        elif diff.seconds > 60:
+            last_text = f"{diff.seconds // 60} мин. назад"
+        else:
+            last_text = "только что"
+        return {"is_online": False, "last_seen_text": last_text}
+    return {"is_online": False, "last_seen_text": "недавно"}
 
-@app.get("/health")
-async def health():
-    return {"status": "ok", "service": "LUXA", "version": "2.0"}
+@app.post("/add_friend")
+async def add_friend(data: FriendAction, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Friend).where(Friend.user_phone == data.user_phone, Friend.friend_phone == data.friend_phone))
+    if result.scalar_one_or_none():
+        return {"status": "error"}
+    db.add(Friend(user_phone=data.user_phone, friend_phone=data.friend_phone))
+    await db.commit()
+    return {"status": "ok"}
+
+@app.get("/friends/{phone}")
+async def get_friends(phone: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Friend).where(Friend.user_phone == phone))
+    return [{"friend_phone": f.friend_phone} for f in result.scalars().all()]
+
+@app.get("/search_users")
+async def search_users(q: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(or_(User.username.ilike(f"%{q}%"), User.phone.ilike(f"%{q}%"))).limit(20))
+    users = result.scalars().all()
+    return [{"phone": u.phone, "username": u.username} for u in users]
+
+@app.post("/send")
+async def send_message(msg: MessageSend, db: AsyncSession = Depends(get_db)):
+    new_msg = Message(from_phone=msg.from_phone, to_phone=msg.to_phone, text=msg.text, message_type=msg.message_type, timestamp=datetime.utcnow())
+    db.add(new_msg)
+    await db.commit()
+    return {"status": "ok"}
+
+@app.get("/dialog/{phone1}/{phone2}")
+async def get_dialog(phone1: str, phone2: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Message).where(((Message.from_phone == phone1) & (Message.to_phone == phone2)) | ((Message.from_phone == phone2) & (Message.to_phone == phone1))).order_by(Message.timestamp))
+    messages = result.scalars().all()
+    return {"messages": [{"id": m.id, "from": m.from_phone, "text": m.text, "time": m.timestamp.isoformat(), "message_type": m.message_type} for m in messages]}
+
+@app.post("/send_general")
+async def send_general_message(msg: GeneralMessageSend, db: AsyncSession = Depends(get_db)):
+    new_msg = GeneralMessage(from_phone=msg.from_phone, text=msg.text, message_type=msg.message_type, timestamp=datetime.utcnow())
+    db.add(new_msg)
+    await db.commit()
+    return {"status": "ok"}
+
+@app.get("/general_messages")
+async def get_general_messages(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(GeneralMessage).order_by(GeneralMessage.timestamp))
+    messages = result.scalars().all()
+    users_result = await db.execute(select(User))
+    users = {u.phone: u.username for u in users_result.scalars().all()}
+    return {"messages": [{"id": m.id, "from": m.from_phone, "from_name": users.get(m.from_phone, m.from_phone), "text": m.text, "time": m.timestamp.isoformat(), "message_type": m.message_type} for m in messages]}
+
+@app.get("/users")
+async def get_users(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User))
+    users = result.scalars().all()
+    return [{"phone": u.phone, "username": u.username} for u in users]
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))

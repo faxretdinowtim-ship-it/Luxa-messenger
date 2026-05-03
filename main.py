@@ -1,4 +1,20 @@
-<!DOCTYPE html>
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+import os
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ========== ВЕСЬ ТВОЙ HTML КОД (тот самый топовый дизайн) ==========
+HTML_PAGE = """<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -18,7 +34,6 @@
             position: relative;
         }
         
-        /* 3D КИНЕМАТОГРАФИЧНЫЙ ФОН */
         body::before {
             content: '';
             position: fixed;
@@ -27,11 +42,11 @@
             width: 200%;
             height: 200%;
             background: 
-                radial-gradient(ellipse at 20% 25%, rgba(139, 92, 246, 0.3), transparent 70%),
-                radial-gradient(ellipse at 85% 70%, rgba(99, 102, 241, 0.25), transparent 60%),
-                radial-gradient(ellipse at 50% 50%, rgba(255,215,0,0.08), transparent 80%);
+                radial-gradient(ellipse at 20% 25%, rgba(139, 92, 246, 0.35), transparent 70%),
+                radial-gradient(ellipse at 85% 70%, rgba(99, 102, 241, 0.3), transparent 60%),
+                radial-gradient(ellipse at 50% 50%, rgba(255,215,0,0.1), transparent 80%);
             z-index: -3;
-            animation: cosmicDrift 30s ease infinite;
+            animation: cosmicDrift 25s ease infinite;
         }
         
         @keyframes cosmicDrift {
@@ -47,30 +62,29 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 100%);
+            background: radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.5) 100%);
             z-index: -2;
             pointer-events: none;
         }
         
-        /* ПРЕМИУМ СТЕКЛЯННЫЙ КОНТЕЙНЕР */
         .app {
             width: 100%;
             max-width: 480px;
             height: 95vh;
             max-height: 820px;
             background: rgba(10, 10, 22, 0.55);
-            backdrop-filter: blur(40px) saturate(200%);
-            border-radius: 60px;
+            backdrop-filter: blur(40px) saturate(180%);
+            border-radius: 56px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 45px 75px -35px rgba(0,0,0,0.7), 0 0 0 1.5px rgba(255,215,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
+            box-shadow: 0 45px 75px -35px rgba(0,0,0,0.6), 0 0 0 1.5px rgba(255,215,0,0.2);
             animation: glassAscend 0.6s cubic-bezier(0.16,1,0.3,1);
         }
         
         @keyframes glassAscend {
             from { opacity: 0; transform: translateY(40px) scale(0.94); backdrop-filter: blur(0px); }
-            to { opacity: 1; transform: translateY(0) scale(1); backdrop-filter: blur(40px) saturate(200%); }
+            to { opacity: 1; transform: translateY(0) scale(1); backdrop-filter: blur(40px) saturate(180%); }
         }
         
         .page {
@@ -86,9 +100,8 @@
             to { opacity: 1; transform: translateX(0); }
         }
         
-        /* БРИЛЛИАНТОВОЕ МЕНЮ */
         .diamond-menu {
-            background: rgba(8, 8, 18, 0.9);
+            background: rgba(8, 8, 18, 0.92);
             backdrop-filter: blur(30px);
             display: flex;
             justify-content: space-around;
@@ -122,14 +135,13 @@
             text-shadow: 0 0 6px rgba(255,215,0,0.6);
         }
         
-        /* ЗОЛОТОЙ ХЕДЕР */
         .gold-header {
             padding: 18px 22px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 0.5px solid rgba(255,215,0,0.2);
-            background: rgba(0,0,0,0.15);
+            background: rgba(0,0,0,0.2);
         }
         .logo-diamond {
             font-size: 22px;
@@ -138,7 +150,6 @@
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
-            text-shadow: 0 0 8px rgba(255,215,0,0.3);
         }
         .profile-diamond {
             background: rgba(255,215,0,0.1);
@@ -148,10 +159,8 @@
             font-weight: 600;
             color: #FFD700;
             border: 0.5px solid rgba(255,215,0,0.3);
-            backdrop-filter: blur(4px);
         }
         
-        /* ЭЛИТНЫЕ КАРТОЧКИ */
         .elite-card {
             background: rgba(255,255,255,0.04);
             backdrop-filter: blur(12px);
@@ -164,9 +173,7 @@
             cursor: pointer;
             border: 0.5px solid rgba(255,215,0,0.2);
             transition: all 0.25s ease;
-            box-shadow: 0 6px 16px -8px rgba(0,0,0,0.3);
         }
-        .elite-card:hover { transform: translateX(5px); border-color: rgba(255,215,0,0.5); background: rgba(255,255,255,0.06); }
         .elite-card:active { transform: scale(0.98); }
         
         .avatar-diamond {
@@ -177,13 +184,11 @@
             align-items: center;
             justify-content: center;
             font-size: 28px;
-            box-shadow: 0 8px 18px -8px rgba(0,0,0,0.4);
         }
         .info-diamond { flex: 1; }
         .name-diamond { font-weight: 700; font-size: 17px; color: #FFF5E0; }
         .status-diamond { font-size: 12px; opacity: 0.7; margin-top: 4px; color: rgba(255,255,255,0.7); }
         
-        /* ЛЮКСОВЫЕ СООБЩЕНИЯ */
         .luxury-message {
             max-width: 80%;
             padding: 12px 20px;
@@ -191,7 +196,6 @@
             font-size: 15px;
             margin-bottom: 10px;
             animation: messageReveal 0.35s cubic-bezier(0.2,0.9,0.4,1.2);
-            position: relative;
             box-shadow: 0 6px 20px -10px rgba(0,0,0,0.3);
         }
         @keyframes messageReveal {
@@ -203,7 +207,6 @@
             align-self: flex-end;
             border-bottom-right-radius: 10px;
             color: white;
-            box-shadow: 0 0 18px rgba(139,92,246,0.4);
         }
         .msg-in {
             background: rgba(35, 35, 55, 0.85);
@@ -223,7 +226,6 @@
         }
         .delivered-icon { color: #4ade80; }
         
-        /* ПРЕМИУМ ПОЛЯ ВВОДА */
         .input-premium {
             display: flex;
             gap: 12px;
@@ -232,7 +234,6 @@
             padding: 6px 6px 6px 24px;
             margin: 12px;
             border: 0.5px solid rgba(255,215,0,0.25);
-            backdrop-filter: blur(15px);
         }
         .input-premium:focus-within {
             border-color: #FFD700;
@@ -255,8 +256,6 @@
             padding: 0;
             font-size: 22px;
             margin: 0;
-            box-shadow: 0 0 12px rgba(99,102,241,0.5);
-            transition: all 0.2s;
         }
         .input-premium button:active { transform: scale(0.94); }
         
@@ -270,7 +269,7 @@
             font-size: 15px;
             outline: none;
         }
-        input:focus { border-color: #FFD700; box-shadow: 0 0 12px rgba(255,215,0,0.2); }
+        input:focus { border-color: #FFD700; }
         button {
             background: linear-gradient(135deg, #8B5CF6, #6366F1);
             border: none;
@@ -281,8 +280,6 @@
             font-size: 16px;
             cursor: pointer;
             margin-top: 12px;
-            transition: all 0.2s;
-            box-shadow: 0 4px 15px rgba(99,102,241,0.3);
         }
         button:active { transform: scale(0.97); }
         
@@ -308,30 +305,25 @@
             display: inline-block;
             margin-bottom: 16px;
         }
-        .back-gold:active { transform: scale(0.96); }
-        
         .success, .error {
             padding: 12px;
             border-radius: 60px;
             text-align: center;
             margin-top: 12px;
             display: none;
-            font-weight: 500;
         }
-        .success { background: #10b981; box-shadow: 0 0 15px #10b98140; }
+        .success { background: #10b981; }
         .error { background: #ef4444; }
         .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .scroll-area { height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-        .hidden { display: none; }
         
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
-        ::-webkit-scrollbar-thumb { background: #FFD700; border-radius: 10px; box-shadow: 0 0 5px #FFD700; }
+        ::-webkit-scrollbar-thumb { background: #FFD700; border-radius: 10px; }
     </style>
 </head>
 <body>
 <div class="app" id="app">
-    <!-- ЛОГИН -->
     <div id="loginPage" class="page active" style="display: flex; flex-direction: column; justify-content: center;">
         <div style="text-align: center; margin-bottom: 40px;">
             <div style="font-size: 80px; margin-bottom: 12px; text-shadow: 0 0 30px #FFD700;">💎</div>
@@ -340,9 +332,9 @@
         </div>
         <input type="tel" id="loginPhone" placeholder="ТЕЛЕФОН" style="margin-bottom: 12px;">
         <input type="text" id="loginName" placeholder="ИМЯ" style="margin-bottom: 20px;">
-        <button id="doLoginBtn">ВОЙТИ</button>
+        <button id="doLoginBtn">ВОЙТИ В LUXA</button>
         <input type="text" id="newNick" placeholder="НОВЫЙ НИК" style="margin-top: 20px;">
-        <button id="updateProfileBtn" style="background: transparent; border: 1px solid rgba(255,215,0,0.4);">ОБНОВИТЬ</button>
+        <button id="updateProfileBtn" style="background: transparent; border: 1px solid rgba(255,215,0,0.4);">ОБНОВИТЬ ПРОФИЛЬ</button>
         <div id="successMsg" class="success"></div>
         <div id="errorMsg" class="error"></div>
     </div>
@@ -385,8 +377,7 @@
 </div>
 
 <script>
-    // ========== РАБОТА С ТВОИМ API (без изменений) ==========
-    const API = "https://social-v2-z9qu.onrender.com";
+    const API = window.location.origin;
     let currentUser = null, activeChat = null, currentFriends = [], pollingChat = null, glbInt = null;
 
     async function regUser(phone, name) {
@@ -568,4 +559,14 @@
     }
 </script>
 </body>
-</html>
+</html>"""
+
+@app.get("/")
+@app.get("/web")
+async def serve_index():
+    return HTMLResponse(content=HTML_PAGE)
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=port)
